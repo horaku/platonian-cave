@@ -77,14 +77,14 @@
 ## Workstream 4 — Фаза 4: Hypothesis Lattice
 
 ### Задачи
-- [ ] Реализовать `HypothesisLattice` с differentiable hypotheses.
-- [ ] Реализовать gate фазы 4 (запрет дубликатов/вариантов одной идеи).
-- [ ] Добавить связи с intent fragments и lexicon terms.
+- [x] Реализовать `HypothesisLattice` с differentiable hypotheses.
+- [x] Реализовать gate фазы 4 (запрет дубликатов/вариантов одной идеи).
+- [x] Добавить связи с intent fragments и lexicon terms.
 
 ### Комплексные тесты
-- [ ] **F4.Core.Functionality**: создаются гипотезы с evidence_needed и falsification conditions.
-- [ ] **F4.Gate.Invariants**: gate отклоняет недифференцируемые гипотезы.
-- [ ] **F4.CrossPhase.Compatibility**: каждая гипотеза опирается на promoted surface+lexicon; отсутствие связей приводит к revise.
+- [x] **F4.Core.Functionality**: создаются гипотезы с evidence_needed и falsification conditions.
+- [x] **F4.Gate.Invariants**: gate отклоняет недифференцируемые гипотезы.
+- [x] **F4.CrossPhase.Compatibility**: каждая гипотеза опирается на promoted surface+lexicon; отсутствие связей приводит к revise.
 
 ---
 

@@ -278,3 +278,110 @@ PY
 1. Убедиться, что Phase 2 завершилась решением `PROMOTE`.
 2. При `REVISE` — устранить замечания gate Phase 2.
 3. Повторить запуск цепочки.
+
+---
+
+## 15) Порядок событий: Phase 4 (Hypothesis Lattice)
+
+1. Предусловия запуска:
+   - есть `run_state.promoted["phase1_intent_surface"]`;
+   - есть `run_state.promoted["phase3_terminology_normalization"]`.
+   - При отсутствии любого из них запуск запрещён (`ValueError`).
+
+2. Вызов `run_phase4(run_state)`.
+
+3. `build_hypothesis_lattice(problem_surface, working_lexicon)` формирует payload с гипотезами:
+   - `hypothesis_id`, `framing`, `type`;
+   - `linked_intent_fragments`, `linked_lexicon_terms`;
+   - `evidence_needed`, `would_be_falsified_by`;
+   - `do_not_rank_yet=True`.
+
+4. Executor создаёт `ProposalRecord(phase="phase4_hypothesis_lattice")` и пишет его в `run_state.proposals`.
+
+5. Gate-проверка `review_phase4(payload)`:
+   - hypotheses не пустые;
+   - `hypothesis_id` уникальны;
+   - hypotheses взаимно различимы (non-differentiable варианты отклоняются);
+   - есть связи с intent fragments и lexicon terms;
+   - есть `evidence_needed` и `would_be_falsified_by`;
+   - `do_not_rank_yet` обязательно `True`.
+
+6. Пишется `DecisionEvent` в `run_state.events`.
+
+7. Только при `PROMOTE` выполняется запись в `run_state.promoted["phase4_hypothesis_lattice"]`.
+
+---
+
+## 16) Тест исполняемости Phase 4
+
+```bash
+pytest -q tests/test_phase4.py
+```
+
+Ожидаемое покрытие:
+- core functionality для генерации lattice;
+- gate invariant: non-differentiable hypotheses блокируются;
+- cross-phase compatibility: отсутствие link к lexicon → `REVISE`.
+
+---
+
+## 17) Тест совместимости цепочки Phase 1 → 2 → 3 → 4
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py
+```
+
+Ручная проверка полного цикла:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.graph.phase4 import run_phase4
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_p2_p3_p4', trace_id='trace_p1_p2_p3_p4')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+run_phase4(rs)
+
+print('phase1_promoted=', 'phase1_intent_surface' in rs.promoted)
+print('phase2_promoted=', 'phase2_vocabulary_bootstrap' in rs.promoted)
+print('phase3_promoted=', 'phase3_terminology_normalization' in rs.promoted)
+print('phase4_promoted=', 'phase4_hypothesis_lattice' in rs.promoted)
+print('events=', len(rs.events))
+print('last_phase=', rs.events[-1].phase)
+print('last_decision=', rs.events[-1].decision.value)
+PY
+```
+
+Ожидание:
+- все `phase*_promoted=True`;
+- `events=4`;
+- `last_phase=phase4_hypothesis_lattice`;
+- `last_decision=PROMOTE`.
+
+---
+
+## 18) Диагностика для Phase 4
+
+### Симптом: `ValueError: phase4 requires promoted phase1_intent_surface and phase3_terminology_normalization`
+Причина: отсутствует promoted-state одной из требуемых фаз.
+
+Действия:
+1. проверить решения в `run_state.events` для phase1 и phase3;
+2. повторно выполнить недостающую фазу до `PROMOTE`;
+3. повторно запустить phase4.
+
+### Симптом: `REVISE` на phase4 gate
+Типовые причины:
+- недифференцируемые гипотезы;
+- отсутствуют связи с lexicon/intent;
+- отсутствуют `evidence_needed` или `would_be_falsified_by`;
+- `do_not_rank_yet != True`.
+
+Действия:
+1. проверить `run_state.events[-1].reason`;
+2. поправить генерацию lattice;
+3. повторить запуск phase4.
