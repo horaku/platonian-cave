@@ -514,3 +514,149 @@ PY
 1. проверить наличие `phase5_source_discovery_design` в `run_state.promoted`;
 2. проверить последнее решение gate;
 3. исправить замечания и повторить phase5.
+
+---
+
+## 23) Порядок событий: Phase 6 (Triage and Extraction)
+
+1. Предусловия запуска:
+   - есть `run_state.promoted["phase4_hypothesis_lattice"]`;
+   - есть `run_state.promoted["phase5_source_discovery_design"]`.
+   - При отсутствии одного из них `run_phase6` завершится `ValueError`.
+
+2. Вход фазы:
+   - `retrieved_records` (реальные записи из retrieval-слоя);
+   - promoted state из phases 4 и 5.
+
+3. Вызов `run_phase6(run_state, retrieved_records)`.
+
+4. Внутри phase node `triage_and_extract(...)` формируются:
+   - `triage.screening_criteria` (`include_if/exclude_if/review_bucket_if`),
+   - `accepted_items`, `rejected_items`, `review_bucket`,
+   - `extractions` с provenance:
+     - `source_id`,
+     - `source_locator.url_or_doi` + span/section,
+     - `extracted_claim`,
+     - `linked_hypothesis`,
+     - `supports_or_challenges`, `uncertainty_flags`.
+
+5. Executor формирует `ProposalRecord(phase="phase6_triage_and_extraction")` и пишет в `run_state.proposals`.
+
+6. Gate `review_phase6(payload, active_hypothesis_ids)` проверяет:
+   - полноту screening criteria;
+   - наличие extraction matrix, если есть accepted items;
+   - связь accepted/extractions с active hypotheses;
+   - наличие `source_locator.url_or_doi` и `extracted_claim`.
+
+7. Записывается `DecisionEvent` в `run_state.events`.
+
+8. Если decision=`PROMOTE`, `phase6_triage_and_extraction` попадает в `run_state.promoted`.
+
+9. `can_run_synthesis(run_state)`:
+   - `False` до promoted phase6;
+   - `True` только при promoted phase6 и непустом `extractions`.
+
+---
+
+## 24) Тест исполняемости Phase 6
+
+```bash
+pytest -q tests/test_phase6.py
+```
+
+Покрывает:
+- core functionality triage/extraction;
+- gate invariant: accepted items требуют extraction matrix;
+- cross-phase linkage to active hypotheses;
+- policy: synthesis blocked before phase6 promotion.
+
+---
+
+## 25) Тест совместимости цепочки Phase 1 → 2 → 3 → 4 → 5 → 6
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py
+```
+
+Ручной интеграционный прогон:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.graph.phase4 import run_phase4
+from doc3_executor.graph.phase5 import run_phase5
+from doc3_executor.graph.phase6 import run_phase6, can_run_synthesis
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_to_p6', trace_id='trace_p1_to_p6')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+run_phase4(rs)
+run_phase5(rs)
+print('synthesis_before_p6=', can_run_synthesis(rs))
+
+active_hid = rs.promoted['phase4_hypothesis_lattice']['hypotheses'][0]['hypothesis_id']
+records = [
+    {
+        'source_id': 's1',
+        'linked_hypotheses': [active_hid],
+        'url_or_doi': 'https://example.org/s1',
+        'section': 'results',
+        'span': 'p3',
+        'claim': 'Higher cognitive load increases dropout risk.',
+        'evidence_type': 'case_study',
+        'supports_or_challenges': 'supports',
+    },
+    {'source_id': 's2', 'linked_hypotheses': [], 'url_or_doi': 'https://example.org/s2'}
+]
+run_phase6(rs, records)
+
+print('phase6_promoted=', 'phase6_triage_and_extraction' in rs.promoted)
+print('events=', len(rs.events))
+print('last_phase=', rs.events[-1].phase)
+print('last_decision=', rs.events[-1].decision.value)
+print('synthesis_after_p6=', can_run_synthesis(rs))
+PY
+```
+
+Ожидание:
+- `synthesis_before_p6=False`;
+- `phase6_promoted=True`;
+- `events=6`;
+- `last_phase=phase6_triage_and_extraction`;
+- `last_decision=PROMOTE`;
+- `synthesis_after_p6=True`.
+
+---
+
+## 26) Диагностика для Phase 6
+
+### Симптом: `ValueError: phase6 requires promoted phase4_hypothesis_lattice and phase5_source_discovery_design`
+Причина: отсутствует promoted phase4 или phase5.
+
+Действия:
+1. проверить `DecisionEvent` phase4/phase5;
+2. довести недостающую фазу до `PROMOTE`;
+3. повторить phase6.
+
+### Симптом: phase6 decision = `REVISE`
+Типовые причины:
+- отсутствуют или неполны screening criteria;
+- есть accepted items, но отсутствуют extractions;
+- extraction привязан к неактивной гипотезе;
+- отсутствует `source_locator.url_or_doi` или `extracted_claim`.
+
+Действия:
+1. проверить `run_state.events[-1].reason`;
+2. исправить triage/extraction payload;
+3. повторить запуск phase6.
+
+### Симптом: synthesis остаётся заблокированным после phase6
+Причина: phase6 не promoted или пустой extraction matrix.
+
+Действия:
+1. проверить наличие `phase6_triage_and_extraction` в `run_state.promoted`;
+2. проверить `len(run_state.promoted['phase6_triage_and_extraction']['extractions']) > 0`;
+3. устранить причину `REVISE` и повторить phase6.

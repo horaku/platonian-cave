@@ -106,15 +106,15 @@
 ## Workstream 6 — Фаза 6: Triage and Extraction
 
 ### Задачи
-- [ ] Реализовать triage-слой (`accepted/rejected/review_bucket`) с причинами решений.
-- [ ] Реализовать extraction-слой с provenance locator.
-- [ ] Вести rejection log и uncertainty flags.
+- [x] Реализовать triage-слой (`accepted/rejected/review_bucket`) с причинами решений.
+- [x] Реализовать extraction-слой с provenance locator.
+- [x] Вести rejection log и uncertainty flags.
 
 ### Комплексные тесты
-- [ ] **F6.Core.Functionality**: из реальных retrieved records формируются triage и extraction records по схеме.
-- [ ] **F6.Gate.Invariants**: summary/synthesis запрещены до наличия extraction criteria и evidence matrix.
-- [ ] **F6.CrossPhase.Compatibility**: каждый extraction связан с hypothesis из promoted lattice и query family из promoted discovery plan.
-- [ ] **F6.DataIntegrity**: `source_id`/`extraction_id`/locator непротиворечивы и разрешаются в source registry.
+- [x] **F6.Core.Functionality**: из реальных retrieved records формируются triage и extraction records по схеме.
+- [x] **F6.Gate.Invariants**: summary/synthesis запрещены до наличия extraction criteria и evidence matrix.
+- [x] **F6.CrossPhase.Compatibility**: каждый extraction связан с hypothesis из promoted lattice и query family из promoted discovery plan.
+- [x] **F6.DataIntegrity**: `source_id`/`extraction_id`/locator непротиворечивы и разрешаются в source registry.
 
 ---
 
