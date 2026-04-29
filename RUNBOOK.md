@@ -385,3 +385,132 @@ PY
 1. проверить `run_state.events[-1].reason`;
 2. поправить генерацию lattice;
 3. повторить запуск phase4.
+
+---
+
+## 19) Порядок событий: Phase 5 (Source-Discovery Design)
+
+1. Предусловия запуска:
+   - есть `run_state.promoted["phase3_terminology_normalization"]`;
+   - есть `run_state.promoted["phase4_hypothesis_lattice"]`.
+   - При отсутствии любого — запуск фазы 5 запрещён (`ValueError`).
+
+2. Вызов `run_phase5(run_state)`.
+
+3. `build_source_discovery_plan(hypothesis_lattice, working_lexicon)` формирует `by_hypothesis`:
+   - для каждой активной гипотезы формируются `source_groups` (с role/limitations);
+   - формируются `query_families` с:
+     - `seed_terms`, `expansion_terms`,
+     - `negative_filters`,
+     - `search_ready_queries`,
+     - `expected_evidence_types`.
+
+4. Executor создаёт `ProposalRecord(phase="phase5_source_discovery_design")`.
+
+5. Proposal записывается в `run_state.proposals`.
+
+6. Gate-проверка `review_phase5(payload, active_hypothesis_ids)`:
+   - покрыты все active hypotheses;
+   - есть `source_groups`;
+   - есть `query_families`;
+   - в каждой query family есть `negative_filters` и `search_ready_queries`;
+   - есть и валидны `expected_evidence_types`.
+
+7. Пишется `DecisionEvent` в `run_state.events`.
+
+8. Только при `PROMOTE` обновляется `run_state.promoted["phase5_source_discovery_design"]`.
+
+9. `can_run_retrieval(run_state)` переключается:
+   - `False` до promoted Phase 5;
+   - `True` после promoted Phase 5.
+
+---
+
+## 20) Тест исполняемости Phase 5
+
+```bash
+pytest -q tests/test_phase5.py
+```
+
+Покрывает:
+- core functionality source-discovery plan;
+- gate invariants (включая mandatory negative filters);
+- cross-phase hypothesis coverage;
+- pre-retrieval policy.
+
+---
+
+## 21) Тест совместимости цепочки Phase 1 → 2 → 3 → 4 → 5
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py
+```
+
+Ручной интеграционный прогон:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.graph.phase4 import run_phase4
+from doc3_executor.graph.phase5 import run_phase5, can_run_retrieval
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_p2_p3_p4_p5', trace_id='trace_p1_p2_p3_p4_p5')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+run_phase4(rs)
+print('retrieval_before_p5=', can_run_retrieval(rs))
+run_phase5(rs)
+print('phase1_promoted=', 'phase1_intent_surface' in rs.promoted)
+print('phase2_promoted=', 'phase2_vocabulary_bootstrap' in rs.promoted)
+print('phase3_promoted=', 'phase3_terminology_normalization' in rs.promoted)
+print('phase4_promoted=', 'phase4_hypothesis_lattice' in rs.promoted)
+print('phase5_promoted=', 'phase5_source_discovery_design' in rs.promoted)
+print('events=', len(rs.events))
+print('last_phase=', rs.events[-1].phase)
+print('last_decision=', rs.events[-1].decision.value)
+print('retrieval_after_p5=', can_run_retrieval(rs))
+PY
+```
+
+Ожидание:
+- `retrieval_before_p5=False`;
+- все `phase*_promoted=True` после phase5;
+- `events=5`;
+- `last_phase=phase5_source_discovery_design`;
+- `last_decision=PROMOTE`;
+- `retrieval_after_p5=True`.
+
+---
+
+## 22) Диагностика для Phase 5
+
+### Симптом: `ValueError: phase5 requires promoted phase3_terminology_normalization and phase4_hypothesis_lattice`
+Причина: отсутствует promoted-state phase3 или phase4.
+
+Действия:
+1. проверить `DecisionEvent` для phase3/phase4;
+2. довести недостающую фазу до `PROMOTE`;
+3. перезапустить phase5.
+
+### Симптом: `REVISE` на phase5 gate
+Типовые причины:
+- не покрыты все active hypotheses;
+- отсутствуют `negative_filters`;
+- отсутствуют `search_ready_queries`;
+- пустые/невалидные `expected_evidence_types`.
+
+Действия:
+1. проверить `run_state.events[-1].reason`;
+2. исправить payload phase5;
+3. повторить запуск phase5.
+
+### Симптом: retrieval не разрешён после phase5
+Причина: phase5 не получила `PROMOTE`.
+
+Действия:
+1. проверить наличие `phase5_source_discovery_design` в `run_state.promoted`;
+2. проверить последнее решение gate;
+3. исправить замечания и повторить phase5.

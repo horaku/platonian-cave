@@ -91,15 +91,15 @@
 ## Workstream 5 — Фаза 5: Source-Discovery Design
 
 ### Задачи
-- [ ] Реализовать `SourceDiscoveryPlan` по каждой активной гипотезе.
-- [ ] Обязать наличие source groups, query families, negative filters, expected evidence types.
-- [ ] Реализовать pre-retrieval gate (жёсткий запрет retrieval до promotion плана).
+- [x] Реализовать `SourceDiscoveryPlan` по каждой активной гипотезе.
+- [x] Обязать наличие source groups, query families, negative filters, expected evidence types.
+- [x] Реализовать pre-retrieval gate (жёсткий запрет retrieval до promotion плана).
 
 ### Комплексные тесты
-- [ ] **F5.Core.Functionality**: для каждой гипотезы присутствуют source groups с epistemic roles и limitations.
-- [ ] **F5.Gate.Invariants**: gate отклоняет plan без negative filters или без expected evidence types.
-- [ ] **F5.CrossPhase.Compatibility**: plan содержит только термины/гипотезы из promoted state; устаревшие ссылки отклоняются.
-- [ ] **F5.Policy.BlockPrematureRetrieval**: вызов `search.run` до promoted plan завершается проверяемой protocol error.
+- [x] **F5.Core.Functionality**: для каждой гипотезы присутствуют source groups с epistemic roles и limitations.
+- [x] **F5.Gate.Invariants**: gate отклоняет plan без negative filters или без expected evidence types.
+- [x] **F5.CrossPhase.Compatibility**: plan содержит только термины/гипотезы из promoted state; устаревшие ссылки отклоняются.
+- [x] **F5.Policy.BlockPrematureRetrieval**: вызов `search.run` до promoted plan завершается проверяемой protocol error.
 
 ---
 
