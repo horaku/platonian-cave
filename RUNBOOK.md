@@ -1,0 +1,516 @@
+# RUNBOOK — Doc3 Executor
+
+## Назначение
+Операционное руководство по запуску, наблюдению, диагностике и восстановлению для текущей реализации:
+- **Phase 1 — Intent Surface Extraction**
+- **Phase 2 — Vocabulary Bootstrapping**
+
+Документ фиксирует точный порядок событий, gate-переходов и условий promotion/invalidation.
+
+---
+
+## 1) Что реализовано
+
+### Phase 1
+1. Вход: plain-language запрос.
+2. Выход фазы: `ProblemSurfaceRecord` в proposal.
+3. Gate: `PROMOTE|REVISE|REJECT`.
+4. Event: `DecisionEvent` записывается всегда.
+5. Promotion: только при `PROMOTE`.
+
+### Phase 2
+1. Вход: только `promoted` output Phase 1 (`phase1_intent_surface`).
+2. Выход фазы: `VocabularyCandidateSet`-подобный payload (`by_surface_fragment`, paraphrases, confusable terms, unresolved questions).
+3. Gate: расширение терминов без нормализации (expansion-only).
+4. Event: `DecisionEvent` записывается всегда.
+5. Promotion: только при `PROMOTE`.
+6. Совместимость: `phase1_fingerprint` в phase2 payload для проверки invalidation.
+
+---
+
+## 2) Компоненты и роли
+
+- `extract_problem_surface` — phase1 node.
+- `review_phase1` — gate phase1.
+- `run_phase1` — оркестрация phase1.
+- `build_vocabulary_candidates` — phase2 node.
+- `review_phase2` — gate phase2.
+- `run_phase2` — оркестрация phase2.
+- `is_phase2_invalidated` — проверка совместимости phase2 с обновлённым promoted phase1.
+- `InMemoryStateStore` — proposals/events/promoted storage.
+
+---
+
+## 3) Порядок событий: Phase 1
+
+1. Создать `RunState(run_id, trace_id)`.
+2. Вызвать `run_phase1(run_state, user_input)`.
+3. `extract_problem_surface` формирует структуру surface.
+4. Executor создаёт `ProposalRecord(phase="phase1_intent_surface")`.
+5. `state_store.propose()` сохраняет proposal.
+6. `review_phase1()` возвращает decision+reason.
+7. Executor пишет `DecisionEvent` через `state_store.add_event()`.
+8. Если decision=`PROMOTE`, выполнить `state_store.promote()`.
+9. Вернуть обновлённый `run_state`.
+
+---
+
+## 4) Порядок событий: Phase 2
+
+1. Проверить наличие `run_state.promoted["phase1_intent_surface"]`.
+   - если нет: phase2 запуск запрещён (`ValueError`).
+2. Вызвать `run_phase2(run_state)`.
+3. `build_vocabulary_candidates(phase1_surface)` строит payload:
+   - `candidate_professional_terms`,
+   - `searchable_paraphrases`,
+   - `nearby_but_confusable_terms`,
+   - `unresolved_terminology_questions`,
+   - `phase1_fingerprint`.
+4. Executor создаёт `ProposalRecord(phase="phase2_vocabulary_bootstrap")`.
+5. `state_store.propose()` сохраняет proposal.
+6. `review_phase2()` проверяет expansion-only contract.
+7. Executor пишет `DecisionEvent`.
+8. Если decision=`PROMOTE`, `state_store.promote("phase2_vocabulary_bootstrap", proposal)`.
+9. Возвращается обновлённый `run_state`.
+
+---
+
+## 5) Gate-инварианты
+
+### Phase 1 gate
+- `stated_request` пустой → `REJECT`
+- Domain lock-in (“это задача из…”) → `REVISE`
+- Specialist term leakage в surface → `REVISE`
+- Нет candidate interpretations → `REJECT`
+- Иначе `PROMOTE`
+
+### Phase 2 gate
+- Нет `by_surface_fragment` → `REJECT`
+- Нет candidate terms во фрагменте → `REVISE`
+- Есть `preferred_term` (premature normalization) → `REVISE`
+- Нет confusable terms → `REVISE`
+- Нет unresolved terminology questions → `REVISE`
+- Иначе `PROMOTE`
+
+---
+
+## 6) Проверка совместимости Phase 1 ↔ Phase 2
+
+Механизм:
+- В phase2 payload сохраняется `phase1_fingerprint`.
+- Функция `is_phase2_invalidated(run_state)` пересчитывает expected fingerprint на базе текущего promoted Phase 1.
+- Если fingerprints расходятся → Phase 2 считается invalidated и требует `REVISE/re-run`.
+
+---
+
+## 7) Операционный запуск
+
+### 7.1 Тест исполняемости Phase 2
+```bash
+pytest -q tests/test_phase2.py
+```
+
+### 7.2 Тест совместимости Phase 1 и Phase 2
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py
+```
+
+### 7.3 Ручной интеграционный прогон P1→P2
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2, is_phase2_invalidated
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_p2', trace_id='trace_p1_p2')
+run_phase1(rs, 'Хочу понять, как лучше искать материалы про то, почему люди бросают сложные онлайн-курсы')
+run_phase2(rs)
+
+print('phase1_promoted=', 'phase1_intent_surface' in rs.promoted)
+print('phase2_promoted=', 'phase2_vocabulary_bootstrap' in rs.promoted)
+print('events=', len(rs.events))
+print('invalidated_before_change=', is_phase2_invalidated(rs))
+
+rs.promoted['phase1_intent_surface']['stated_request'] = 'Другой запрос для проверки'
+print('invalidated_after_change=', is_phase2_invalidated(rs))
+PY
+```
+
+Ожидание:
+- обе фазы promoted = `True`
+- events = 2
+- invalidated_before_change = `False`
+- invalidated_after_change = `True`
+
+---
+
+## 8) Диагностика
+
+### `ValueError: phase2 requires promoted phase1_intent_surface`
+Причина: Phase 2 запущена до успешной promotion фазы 1.
+Действия:
+1. проверить последний `DecisionEvent` phase1;
+2. если `REVISE/REJECT` — исправить surface и перезапустить Phase 1;
+3. повторить запуск Phase 2.
+
+### Phase 2 decision = `REVISE`
+Проверить reason:
+- premature normalization;
+- missing confusable terms;
+- missing unresolved terminology questions;
+- missing candidate terms.
+
+### `ModuleNotFoundError: doc3_executor`
+Добавить `PYTHONPATH=src` для прямого запуска python.
+
+---
+
+## 9) Восстановление
+
+Текущий backend — in-memory:
+1. Повторить прогон с теми же входными параметрами.
+2. Сравнить `proposals/events/promoted`.
+3. При несовместимости Phase 2 выполнить re-run после re-promotion Phase 1.
+
+Ограничение: долговременный persistence backend ещё не внедрён.
+
+---
+
+## 10) Incident checklist
+
+Перед закрытием инцидента проверить:
+- [ ] `phase1_intent_surface` promoted при успешном gate.
+- [ ] `phase2_vocabulary_bootstrap` promoted при успешном gate.
+- [ ] по каждой фазе есть `DecisionEvent`.
+- [ ] Phase 2 не запускается без promoted Phase 1.
+- [ ] `is_phase2_invalidated` корректно выявляет рассинхронизацию после изменения Phase 1.
+- [ ] тесты `tests/test_phase1.py` и `tests/test_phase2.py` проходят.
+
+---
+
+## 11) Порядок событий: Phase 3 (Terminology Normalization)
+
+1. Предусловие: должен существовать `run_state.promoted["phase2_vocabulary_bootstrap"]`.
+   - Если нет — запуск Phase 3 запрещён (`ValueError`).
+2. Вызов `run_phase3(run_state)`.
+3. `normalize_terminology(phase2_payload)` строит `WorkingLexicon`-структуру:
+   - `term_families`;
+   - `preferred_term`, `acceptable_synonyms`, `terms_to_avoid`, `conflict_notes`;
+   - `why_preferred_for_this_workflow`, `retrieval_role`;
+   - `source_terms` (обязательная трассировка к кандидатам из Phase 2).
+4. Executor создаёт `ProposalRecord(phase="phase3_terminology_normalization")`.
+5. Proposal записывается в `run_state.proposals`.
+6. `review_phase3(payload)` выполняет gate-check:
+   - families не пустые;
+   - preferred terms уникальны;
+   - retrieval_role ∈ `{seed, expansion, negative_filter, context_only}`;
+   - reason связан с retrieval precision/fidelity;
+   - нет orphan terms (пустых `source_terms`).
+7. Пишется `DecisionEvent` в `run_state.events`.
+8. Только при `PROMOTE` выполняется запись в `run_state.promoted["phase3_terminology_normalization"]`.
+
+### Ожидаемые исходы
+- `PROMOTE`: lexicon пригоден для следующей фазы (hypothesis lattice).
+- `REVISE`: терминологическая нормализация недостаточно обоснована/связана с Phase 2.
+- `REJECT`: критически некорректная структура payload.
+
+---
+
+## 12) Тест исполняемости Phase 3
+
+```bash
+pytest -q tests/test_phase3.py
+```
+
+Проверяет:
+- core functionality;
+- gate invariant по reason (retrieval/fidelity tie);
+- cross-phase compatibility (orphan terms block).
+
+---
+
+## 13) Тест совместимости цепочки Phase 1 → Phase 2 → Phase 3
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py
+```
+
+Ручная проверка цепочки:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_p2_p3_ok', trace_id='trace_p1_p2_p3_ok')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+
+print('phase1_promoted=', 'phase1_intent_surface' in rs.promoted)
+print('phase2_promoted=', 'phase2_vocabulary_bootstrap' in rs.promoted)
+print('phase3_promoted=', 'phase3_terminology_normalization' in rs.promoted)
+print('last_decision=', rs.events[-1].decision.value)
+PY
+```
+
+Ожидание:
+- все три promoted-флага `True`;
+- последний `DecisionEvent` относится к phase3 и имеет `PROMOTE`.
+
+---
+
+## 14) Диагностика для Phase 3
+
+### Симптом: `phase3_promoted=False` и последний decision=`REVISE`
+Частая причина: orphan-linkage в одной из family (`source_terms` пуст).
+
+Действия:
+1. Проверить payload Phase 2 и наличие требуемых candidate terms.
+2. Проверить причины в `run_state.events[-1].reason`.
+3. Исправить mapping в normalization logic и перезапустить Phase 3.
+
+### Симптом: `ValueError: phase3 requires promoted phase2_vocabulary_bootstrap`
+Причина: не выполнен/не promoted Phase 2.
+
+Действия:
+1. Убедиться, что Phase 2 завершилась решением `PROMOTE`.
+2. При `REVISE` — устранить замечания gate Phase 2.
+3. Повторить запуск цепочки.
+
+---
+
+## 15) Порядок событий: Phase 4 (Hypothesis Lattice)
+
+1. Предусловия запуска:
+   - есть `run_state.promoted["phase1_intent_surface"]`;
+   - есть `run_state.promoted["phase3_terminology_normalization"]`.
+   - При отсутствии любого из них запуск запрещён (`ValueError`).
+
+2. Вызов `run_phase4(run_state)`.
+
+3. `build_hypothesis_lattice(problem_surface, working_lexicon)` формирует payload с гипотезами:
+   - `hypothesis_id`, `framing`, `type`;
+   - `linked_intent_fragments`, `linked_lexicon_terms`;
+   - `evidence_needed`, `would_be_falsified_by`;
+   - `do_not_rank_yet=True`.
+
+4. Executor создаёт `ProposalRecord(phase="phase4_hypothesis_lattice")` и пишет его в `run_state.proposals`.
+
+5. Gate-проверка `review_phase4(payload)`:
+   - hypotheses не пустые;
+   - `hypothesis_id` уникальны;
+   - hypotheses взаимно различимы (non-differentiable варианты отклоняются);
+   - есть связи с intent fragments и lexicon terms;
+   - есть `evidence_needed` и `would_be_falsified_by`;
+   - `do_not_rank_yet` обязательно `True`.
+
+6. Пишется `DecisionEvent` в `run_state.events`.
+
+7. Только при `PROMOTE` выполняется запись в `run_state.promoted["phase4_hypothesis_lattice"]`.
+
+---
+
+## 16) Тест исполняемости Phase 4
+
+```bash
+pytest -q tests/test_phase4.py
+```
+
+Ожидаемое покрытие:
+- core functionality для генерации lattice;
+- gate invariant: non-differentiable hypotheses блокируются;
+- cross-phase compatibility: отсутствие link к lexicon → `REVISE`.
+
+---
+
+## 17) Тест совместимости цепочки Phase 1 → 2 → 3 → 4
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py
+```
+
+Ручная проверка полного цикла:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.graph.phase4 import run_phase4
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_p2_p3_p4', trace_id='trace_p1_p2_p3_p4')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+run_phase4(rs)
+
+print('phase1_promoted=', 'phase1_intent_surface' in rs.promoted)
+print('phase2_promoted=', 'phase2_vocabulary_bootstrap' in rs.promoted)
+print('phase3_promoted=', 'phase3_terminology_normalization' in rs.promoted)
+print('phase4_promoted=', 'phase4_hypothesis_lattice' in rs.promoted)
+print('events=', len(rs.events))
+print('last_phase=', rs.events[-1].phase)
+print('last_decision=', rs.events[-1].decision.value)
+PY
+```
+
+Ожидание:
+- все `phase*_promoted=True`;
+- `events=4`;
+- `last_phase=phase4_hypothesis_lattice`;
+- `last_decision=PROMOTE`.
+
+---
+
+## 18) Диагностика для Phase 4
+
+### Симптом: `ValueError: phase4 requires promoted phase1_intent_surface and phase3_terminology_normalization`
+Причина: отсутствует promoted-state одной из требуемых фаз.
+
+Действия:
+1. проверить решения в `run_state.events` для phase1 и phase3;
+2. повторно выполнить недостающую фазу до `PROMOTE`;
+3. повторно запустить phase4.
+
+### Симптом: `REVISE` на phase4 gate
+Типовые причины:
+- недифференцируемые гипотезы;
+- отсутствуют связи с lexicon/intent;
+- отсутствуют `evidence_needed` или `would_be_falsified_by`;
+- `do_not_rank_yet != True`.
+
+Действия:
+1. проверить `run_state.events[-1].reason`;
+2. поправить генерацию lattice;
+3. повторить запуск phase4.
+
+---
+
+## 19) Порядок событий: Phase 5 (Source-Discovery Design)
+
+1. Предусловия запуска:
+   - есть `run_state.promoted["phase3_terminology_normalization"]`;
+   - есть `run_state.promoted["phase4_hypothesis_lattice"]`.
+   - При отсутствии любого — запуск фазы 5 запрещён (`ValueError`).
+
+2. Вызов `run_phase5(run_state)`.
+
+3. `build_source_discovery_plan(hypothesis_lattice, working_lexicon)` формирует `by_hypothesis`:
+   - для каждой активной гипотезы формируются `source_groups` (с role/limitations);
+   - формируются `query_families` с:
+     - `seed_terms`, `expansion_terms`,
+     - `negative_filters`,
+     - `search_ready_queries`,
+     - `expected_evidence_types`.
+
+4. Executor создаёт `ProposalRecord(phase="phase5_source_discovery_design")`.
+
+5. Proposal записывается в `run_state.proposals`.
+
+6. Gate-проверка `review_phase5(payload, active_hypothesis_ids)`:
+   - покрыты все active hypotheses;
+   - есть `source_groups`;
+   - есть `query_families`;
+   - в каждой query family есть `negative_filters` и `search_ready_queries`;
+   - есть и валидны `expected_evidence_types`.
+
+7. Пишется `DecisionEvent` в `run_state.events`.
+
+8. Только при `PROMOTE` обновляется `run_state.promoted["phase5_source_discovery_design"]`.
+
+9. `can_run_retrieval(run_state)` переключается:
+   - `False` до promoted Phase 5;
+   - `True` после promoted Phase 5.
+
+---
+
+## 20) Тест исполняемости Phase 5
+
+```bash
+pytest -q tests/test_phase5.py
+```
+
+Покрывает:
+- core functionality source-discovery plan;
+- gate invariants (включая mandatory negative filters);
+- cross-phase hypothesis coverage;
+- pre-retrieval policy.
+
+---
+
+## 21) Тест совместимости цепочки Phase 1 → 2 → 3 → 4 → 5
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py
+```
+
+Ручной интеграционный прогон:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.graph.phase4 import run_phase4
+from doc3_executor.graph.phase5 import run_phase5, can_run_retrieval
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_p2_p3_p4_p5', trace_id='trace_p1_p2_p3_p4_p5')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+run_phase4(rs)
+print('retrieval_before_p5=', can_run_retrieval(rs))
+run_phase5(rs)
+print('phase1_promoted=', 'phase1_intent_surface' in rs.promoted)
+print('phase2_promoted=', 'phase2_vocabulary_bootstrap' in rs.promoted)
+print('phase3_promoted=', 'phase3_terminology_normalization' in rs.promoted)
+print('phase4_promoted=', 'phase4_hypothesis_lattice' in rs.promoted)
+print('phase5_promoted=', 'phase5_source_discovery_design' in rs.promoted)
+print('events=', len(rs.events))
+print('last_phase=', rs.events[-1].phase)
+print('last_decision=', rs.events[-1].decision.value)
+print('retrieval_after_p5=', can_run_retrieval(rs))
+PY
+```
+
+Ожидание:
+- `retrieval_before_p5=False`;
+- все `phase*_promoted=True` после phase5;
+- `events=5`;
+- `last_phase=phase5_source_discovery_design`;
+- `last_decision=PROMOTE`;
+- `retrieval_after_p5=True`.
+
+---
+
+## 22) Диагностика для Phase 5
+
+### Симптом: `ValueError: phase5 requires promoted phase3_terminology_normalization and phase4_hypothesis_lattice`
+Причина: отсутствует promoted-state phase3 или phase4.
+
+Действия:
+1. проверить `DecisionEvent` для phase3/phase4;
+2. довести недостающую фазу до `PROMOTE`;
+3. перезапустить phase5.
+
+### Симптом: `REVISE` на phase5 gate
+Типовые причины:
+- не покрыты все active hypotheses;
+- отсутствуют `negative_filters`;
+- отсутствуют `search_ready_queries`;
+- пустые/невалидные `expected_evidence_types`.
+
+Действия:
+1. проверить `run_state.events[-1].reason`;
+2. исправить payload phase5;
+3. повторить запуск phase5.
+
+### Симптом: retrieval не разрешён после phase5
+Причина: phase5 не получила `PROMOTE`.
+
+Действия:
+1. проверить наличие `phase5_source_discovery_design` в `run_state.promoted`;
+2. проверить последнее решение gate;
+3. исправить замечания и повторить phase5.
