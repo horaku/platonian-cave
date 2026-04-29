@@ -63,14 +63,14 @@
 ## Workstream 3 — Фаза 3: Terminology Normalization
 
 ### Задачи
-- [ ] Реализовать `WorkingLexicon` с term families, retrieval roles и reasons.
-- [ ] Реализовать gate фазы 3 с обязательной связью preferred terms с retrieval precision/fidelity.
-- [ ] Добавить explicit `terms_to_avoid` и conflict notes.
+- [x] Реализовать `WorkingLexicon` с term families, retrieval roles и reasons.
+- [x] Реализовать gate фазы 3 с обязательной связью preferred terms с retrieval precision/fidelity.
+- [x] Добавить explicit `terms_to_avoid` и conflict notes.
 
 ### Комплексные тесты
-- [ ] **F3.Core.Functionality**: формируются валидные term families с допустимыми ролями (`seed|expansion|negative_filter|context_only`).
-- [ ] **F3.Gate.Invariants**: gate отклоняет preferred term без обоснования для retrieval/instruction fidelity.
-- [ ] **F3.CrossPhase.Compatibility**: все preferred terms трассируются к vocabulary candidates и surface fragments; orphan terms не допускаются.
+- [x] **F3.Core.Functionality**: формируются валидные term families с допустимыми ролями (`seed|expansion|negative_filter|context_only`).
+- [x] **F3.Gate.Invariants**: gate отклоняет preferred term без обоснования для retrieval/instruction fidelity.
+- [x] **F3.CrossPhase.Compatibility**: все preferred terms трассируются к vocabulary candidates и surface fragments; orphan terms не допускаются.
 
 ---
 

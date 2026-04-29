@@ -185,3 +185,96 @@ PY
 - [ ] Phase 2 не запускается без promoted Phase 1.
 - [ ] `is_phase2_invalidated` корректно выявляет рассинхронизацию после изменения Phase 1.
 - [ ] тесты `tests/test_phase1.py` и `tests/test_phase2.py` проходят.
+
+---
+
+## 11) Порядок событий: Phase 3 (Terminology Normalization)
+
+1. Предусловие: должен существовать `run_state.promoted["phase2_vocabulary_bootstrap"]`.
+   - Если нет — запуск Phase 3 запрещён (`ValueError`).
+2. Вызов `run_phase3(run_state)`.
+3. `normalize_terminology(phase2_payload)` строит `WorkingLexicon`-структуру:
+   - `term_families`;
+   - `preferred_term`, `acceptable_synonyms`, `terms_to_avoid`, `conflict_notes`;
+   - `why_preferred_for_this_workflow`, `retrieval_role`;
+   - `source_terms` (обязательная трассировка к кандидатам из Phase 2).
+4. Executor создаёт `ProposalRecord(phase="phase3_terminology_normalization")`.
+5. Proposal записывается в `run_state.proposals`.
+6. `review_phase3(payload)` выполняет gate-check:
+   - families не пустые;
+   - preferred terms уникальны;
+   - retrieval_role ∈ `{seed, expansion, negative_filter, context_only}`;
+   - reason связан с retrieval precision/fidelity;
+   - нет orphan terms (пустых `source_terms`).
+7. Пишется `DecisionEvent` в `run_state.events`.
+8. Только при `PROMOTE` выполняется запись в `run_state.promoted["phase3_terminology_normalization"]`.
+
+### Ожидаемые исходы
+- `PROMOTE`: lexicon пригоден для следующей фазы (hypothesis lattice).
+- `REVISE`: терминологическая нормализация недостаточно обоснована/связана с Phase 2.
+- `REJECT`: критически некорректная структура payload.
+
+---
+
+## 12) Тест исполняемости Phase 3
+
+```bash
+pytest -q tests/test_phase3.py
+```
+
+Проверяет:
+- core functionality;
+- gate invariant по reason (retrieval/fidelity tie);
+- cross-phase compatibility (orphan terms block).
+
+---
+
+## 13) Тест совместимости цепочки Phase 1 → Phase 2 → Phase 3
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py
+```
+
+Ручная проверка цепочки:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_p2_p3_ok', trace_id='trace_p1_p2_p3_ok')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+
+print('phase1_promoted=', 'phase1_intent_surface' in rs.promoted)
+print('phase2_promoted=', 'phase2_vocabulary_bootstrap' in rs.promoted)
+print('phase3_promoted=', 'phase3_terminology_normalization' in rs.promoted)
+print('last_decision=', rs.events[-1].decision.value)
+PY
+```
+
+Ожидание:
+- все три promoted-флага `True`;
+- последний `DecisionEvent` относится к phase3 и имеет `PROMOTE`.
+
+---
+
+## 14) Диагностика для Phase 3
+
+### Симптом: `phase3_promoted=False` и последний decision=`REVISE`
+Частая причина: orphan-linkage в одной из family (`source_terms` пуст).
+
+Действия:
+1. Проверить payload Phase 2 и наличие требуемых candidate terms.
+2. Проверить причины в `run_state.events[-1].reason`.
+3. Исправить mapping в normalization logic и перезапустить Phase 3.
+
+### Симптом: `ValueError: phase3 requires promoted phase2_vocabulary_bootstrap`
+Причина: не выполнен/не promoted Phase 2.
+
+Действия:
+1. Убедиться, что Phase 2 завершилась решением `PROMOTE`.
+2. При `REVISE` — устранить замечания gate Phase 2.
+3. Повторить запуск цепочки.
