@@ -1,5 +1,7 @@
 # Doc3 Executor на базе LangGraph — план перед разработкой
 
+## Итерация 1: Protocol-driven state machine
+
 ## Цель
 Подготовить строгую спецификацию исполнения (Executor Spec), чтобы реализация в LangGraph была **phase-governed capability loop**, а не скрытой factory-пайплайновой автоматизацией.
 
@@ -376,3 +378,107 @@ report_type_mapping:
   - `## 6.1 Main synthesis` явно содержит фразу про blocked finalization.
 - `OC.ProtocolErrorNoFalseReport`:
   - при unrecoverable protocol error возвращается только `terminal_error_return`, без ложного markdown report.
+
+---
+
+## Итерация 2: Agentic deep-research workflow
+
+## Цель
+Перейти от protocol-driven state machine к **capability-based agentic execution under protocol gates**, где агент:
+- выбирает действия на основе gaps/contradictions;
+- использует инструменты как расширение мышления, а не скрытый pipeline;
+- стабильно доводит run до terminal результата (`authoritative|limited|blocked`) без ручного редактирования кода запуска.
+
+## Порядок действий
+
+1. Зафиксировать agentic runtime contract (без кода):
+   - что считается agent step;
+   - какие capability-вызовы разрешены по фазам;
+   - какие действия требуют human approval;
+   - как фиксируется rationale выбора следующего шага.
+
+2. Расширить capability layer до рабочего deep-research surface:
+   - `search.run` (query families, source group routing);
+   - `source.fetch`, `source.enrich` (metadata/provenance);
+   - `extract.claims` (schema-bound extraction proposals);
+   - `validate.claim` (factual/citation/semantic checks);
+   - `compare.contradictions` (conflict graph updates).
+
+3. Встроить deliberation loop в runner:
+   - `PROMOTE` -> next phase;
+   - `REVISE` -> recovery strategy (retry/reopen/ask-human);
+   - `REJECT` -> controlled stop + blocked/error branch;
+   - bounded attempts + deterministic escalation policy.
+
+4. Реализовать explicit recovery policies:
+   - revise-classification (input ambiguity / term mismatch / evidence insufficiency / gate policy violation);
+   - strategy mapping для каждого класса;
+   - audit trail для каждого recovery шага.
+
+5. Добавить human-in-the-loop checkpoints:
+   - approve/reject critical transitions;
+   - explicit override records;
+   - прозрачное разделение agent recommendation vs human decision.
+
+6. Усилить synthesis engine:
+   - формировать содержательный synthesis из validated subset;
+   - обязательно рендерить limitations, contradictions, unresolved items;
+   - запрещать “neutral smoothing” конфликтов.
+
+7. Довести output contract до пользовательского качества:
+   - report sections заполняются из run state, а не шаблонными строками;
+   - для каждого report type фиксируются обязательные content thresholds;
+   - `terminal_error_return` остаётся machine-readable fallback.
+
+8. Добавить e2e productization контур:
+   - CLI/runner Windows-friendly;
+   - стабильный artifact path;
+   - reproducible runs + replay from ledger.
+
+## Технологический стек и стратегия сшивания (итерация 2)
+
+Целевой стек:
+- **LangGraph** — orchestration/state transitions;
+- **OpenAI SDK** — LLM/tool execution;
+- **LangSmith** — tracing/observability.
+
+Принцип разделения ответственности:
+- LangGraph не выполняет бизнес-логику инструментов, а управляет phase/gate flow.
+- OpenAI SDK не управляет фазами, а исполняет capability-вызовы внутри phase/tool nodes.
+- LangSmith не влияет на решения раннера, а фиксирует telemetry/debug traces.
+
+Контрактные швы между слоями:
+1. `GraphState` (единая модель состояния run-а для graph nodes и gates).
+2. `CapabilityRequest/CapabilityResponse` (единый envelope для всех tool-вызовов).
+3. `TraceAdapter` (стандартизированный экспорт событий в LangSmith).
+
+Безопасная стратегия внедрения (без big-bang):
+1. Ввести tracing hooks и capability envelopes без смены default runner.
+2. Перенести в LangGraph сначала ограниченный контур (Phase 1–3), сохранить legacy fallback.
+3. Расширить перенос на Phase 4–8 после parity-тестов между legacy и graph путями.
+4. Переключить default engine только после стабильного прохождения `F*`, `IT*`, `OC*`, `A2.*` тестов.
+
+Ограничение на миграцию:
+- Никаких массовых рефакторов “за один PR”.
+- Один change-set = одна целевая гипотеза + проверка тестами + rollback-safe поведение.
+
+## Acceptance tests (итерация 2)
+- **A2.Tool-Use.Traceability**: каждый capability-вызов имеет rationale, provenance и decision linkage.
+- **A2.Revise.Recovery**: revise не приводит к silent stop; runner завершает run через recovery или blocked branch.
+- **A2.Contradiction.Adjudication**: contradictions сохраняются и явно отражаются в synthesis/output.
+- **A2.HITL.Override.Audit**: человеческие overrides записываются как first-class decision events.
+- **A2.Synthesis.Quality.MinBar**: отчет содержит содержательные разделы evidence/limitations/next actions без template-only output.
+- **A2.Windows.CLI.E2E**: запуск через CLI на Windows даёт terminal payload и artifact без ручных workaround.
+
+## Этапы реализации
+- v3: capability execution + deliberation loop (без полноценного retrieval breadth).
+- v4: full research capabilities + contradiction adjudication + HITL checkpoints.
+- v5: production-grade reporting quality + observability + reliability hardening.
+
+## Определение готовности к завершению итерации 2
+Итерация 2 считается завершённой, когда:
+- агент принимает последовательность действий через capabilities, а не через жёсткий hidden pipeline;
+- revise/reject path управляемо завершаются без ручного редактирования исходников;
+- synthesis опирается на validated evidence core и сохраняет contradictions;
+- CLI/runner обеспечивает предсказуемый terminal output для пользовательских сценариев;
+- e2e acceptance tests итерации 2 проходят стабильно.

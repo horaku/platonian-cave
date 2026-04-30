@@ -1,5 +1,7 @@
 # Doc3 Executor — задачи разработки и комплексные тесты фаз
 
+## Tasks Iteration 1: Protocol-driven state machine
+
 ## Принципы тестирования
 
 1. Тесты **не имитируют** работу фаз: каждая фаза выполняется реальными узлами/гейтами LangGraph и реальными capability-вызовами test harness.
@@ -272,6 +274,116 @@
 - [x] **P10.Runner.RejectHandling**: при `REJECT` runner корректно завершает run через blocked/error ветку output contract.
 - [x] **P10.Packaging.EditableInstall**: после `pip install -e .` импорт `doc3_executor` работает в отдельном python-процессе без `PYTHONPATH`.
 - [x] **P10.CLI.WindowsFlow**: Windows-совместимый сценарий запуска (PowerShell) приводит к artifact report path без ручного патчинга окружения.
+
+---
+
+## Tasks Iteration 2: Agentic deep-research workflow
+
+### Workstream A2.1 — Agentic runtime contract and decision records
+
+#### Задачи
+- [ ] Ввести обязательный `agent_step_record`:
+  - `selected_capability`,
+  - `intent_for_step`,
+  - `why_this_step`,
+  - `expected_state_change`,
+  - `risk_flags`.
+- [ ] Зафиксировать policy matrix “какая capability разрешена на какой фазе”.
+- [ ] Реализовать аудит-связь `agent_step_record -> DecisionEvent -> promoted/verified state`.
+
+#### Комплексные тесты
+- [ ] **A2.Contract.StepTraceability**: каждый шаг агента связан с event chain и воспроизводим по run history.
+- [ ] **A2.Contract.CapabilityPolicy**: нарушение phase-capability policy блокируется и фиксируется как policy violation.
+
+---
+
+### Workstream A2.2 — Capability expansion for deep-research execution
+
+#### Задачи
+- [ ] Реализовать рабочие adapters для:
+  - `search.run`,
+  - `source.fetch`,
+  - `source.enrich`,
+  - `extract.claims`,
+  - `validate.claim`,
+  - `compare.contradictions`.
+- [ ] Добавить единый capability response envelope:
+  - `status`,
+  - `payload`,
+  - `errors`,
+  - `provenance_links`.
+- [ ] Ввести timeout/retry/failure taxonomy для внешних capability вызовов.
+
+#### Комплексные тесты
+- [ ] **A2.Tools.ExecutionSurface**: агент выполняет multi-step capability chain без обхода gate-политик.
+- [ ] **A2.Tools.FailureRecovery**: capability-failures переводятся в управляемый recovery/blocked path без необработанного падения.
+
+---
+
+### Workstream A2.3 — Deliberation loop and revise-class recovery
+
+#### Задачи
+- [ ] Расширить runner до deliberation-first цикла:
+  - выбор следующего шага на основе gaps/contradictions;
+  - strategy selection для `REVISE`.
+- [ ] Ввести revise-classification:
+  - ambiguity,
+  - terminology mismatch,
+  - insufficient evidence,
+  - policy violation.
+- [ ] Для каждого revise-класса закрепить recovery strategy + bounded attempts + escalation.
+
+#### Комплексные тесты
+- [ ] **A2.Revise.ClassStrategies**: для каждого revise-класса применяется корректная стратегия восстановления.
+- [ ] **A2.Reject.ControlledStop**: reject завершает run через blocked/error output branch с понятной диагностикой.
+
+---
+
+### Workstream A2.4 — Human-in-the-loop checkpoints
+
+#### Задачи
+- [ ] Добавить explicit human checkpoints для критичных promotion/finalization переходов.
+- [ ] Реализовать override records:
+  - actor,
+  - reason,
+  - affected records,
+  - downstream invalidation marker.
+- [ ] Ввести policy “agent recommendation != final authority” для high-impact решений.
+
+#### Комплексные тесты
+- [ ] **A2.HITL.OverrideAudit**: каждый override записывается в ledger/decision history и воспроизводим.
+- [ ] **A2.HITL.PolicyBoundary**: критичный переход невозможен без required human checkpoint.
+
+---
+
+### Workstream A2.5 — Synthesis quality and contradiction fidelity
+
+#### Задачи
+- [ ] Реализовать rich synthesis renderer:
+  - evidence backbone,
+  - claim status matrix,
+  - contradiction section,
+  - limitations,
+  - next actions.
+- [ ] Для `limited` отчётов строить synthesis только по validated subset с явным disclosure.
+- [ ] Запретить neutral smoothing конфликтов в narrative.
+
+#### Комплексные тесты
+- [ ] **A2.Synthesis.ContentMinBar**: отчет содержит обязательные содержательные секции, а не template-only строку.
+- [ ] **A2.Synthesis.ContradictionFidelity**: conflicts явно отражены в финальном отчете и не исчезают при рендере.
+
+---
+
+### Workstream A2.6 — Product-grade e2e reliability and replay
+
+#### Задачи
+- [ ] Добавить e2e smoke сценарии CLI для Windows/Linux.
+- [ ] Реализовать replay-from-ledger сценарий до эквивалентного terminal outcome.
+- [ ] Добавить run-level diagnostics summary и failure-classification report.
+
+#### Комплексные тесты
+- [ ] **A2.E2E.CLI.Windows**: стандартный PowerShell запуск даёт terminal payload и artifact path без manual hacks.
+- [ ] **A2.E2E.Replay**: run воспроизводится из ledger до эквивалентного report outcome.
 
 ---
 
