@@ -389,7 +389,9 @@
 
 ## Definition of Done (DoD)
 
-Проект готов к “implementation complete”, когда:
+### Iteration 1 DoD — Completed baseline
+
+Итерация 1 готова к “implementation complete”, когда:
 - [x] все фазовые тесты пройдены;
 - [x] все кросс-фазовые тесты совместимости пройдены;
 - [x] сквозные интеграционные тесты A–H пройдены;
@@ -401,6 +403,17 @@
 - [x] документация (`README.md`, `RUNBOOK.md`, `ARCHITECTURE.md`) заполнена и актуальна.
 - [x] user-facing runner устойчиво обрабатывает `PROMOTE|REVISE|REJECT` без ручного вмешательства в код запуска.
 - [x] editable-install и импорт package подтверждены на чистом окружении без `PYTHONPATH` workaround.
+
+### Iteration 2 DoD — Planned / In progress
+
+Итерация 2 считается завершённой только когда:
+- [ ] закрыты workstreams A2.1–A2.6 (задачи и соответствующие комплексные тесты);
+- [ ] agentic runtime сохраняет полную трассируемость шагов (`agent_step_record -> DecisionEvent -> promoted/verified state`);
+- [ ] capability policy matrix соблюдается и нарушения блокируются gate/policy слоем;
+- [ ] revise/reject ветки дают контролируемый recovery/blocked outcome без необработанных исключений;
+- [ ] HITL checkpoints и override-аудит работают как обязательная authority boundary;
+- [ ] финальный synthesis сохраняет contradiction fidelity и disclosure для limited outcome;
+- [ ] e2e CLI smoke + replay-from-ledger подтверждают воспроизводимость terminal outcome.
 
 ---
 
