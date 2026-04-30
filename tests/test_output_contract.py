@@ -1,5 +1,7 @@
 from doc3_executor.graph.executor import run_phase1
-from doc3_executor.graph.output_contract import build_terminal_report
+from pathlib import Path
+
+from doc3_executor.graph.output_contract import build_terminal_report, deliver_report
 from doc3_executor.graph.phase2 import run_phase2
 from doc3_executor.graph.phase3 import run_phase3
 from doc3_executor.graph.phase4 import run_phase4
@@ -63,6 +65,7 @@ def test_oc_phase8_mapping_consistency():
     outcome = rs.promoted["phase8_finalizer"]["finalization"]["outcome"]
     if outcome == "limited_synthesis":
         assert out["report_filename"] == "limited_synthesis_report.md"
+        assert out["report_envelope"]["finalization_status"] == out["report_type"]
 
 
 def test_oc_blocked_report_no_synthesis():
@@ -82,3 +85,11 @@ def test_oc_protocol_error_no_false_report():
     assert "terminal_error_return" in out
     assert "report_markdown" not in out
 
+
+def test_output_delivery_filesystem_and_api_payload(tmp_path: Path):
+    rs = _run_to_phase8()
+    out = build_terminal_report(rs)
+    delivered = deliver_report(out, base_dir=str(tmp_path), write_to_file=True, print_to_stdout=False)
+    artifact = Path(delivered["artifact_path"])
+    assert artifact.exists()
+    assert artifact.read_text(encoding="utf-8") == delivered["report_markdown"]

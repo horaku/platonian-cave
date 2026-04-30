@@ -1061,3 +1061,42 @@ pytest -q
 - все интеграционные тесты зелёные;
 - поведение протокола подтверждено на сквозной цепочке фазы 1→8;
 - output/finalizer/invalidation/auditability сценарии проверены как единый workflow-контур.
+
+---
+
+## 37) Output Contract (Markdown) — операционный порядок
+
+После `phase8_finalizer` выдача наружу формируется через `build_terminal_report(...)` и (опционально) `deliver_report(...)`.
+
+### Runtime шаги
+1. Убедиться, что есть promoted `phase8_finalizer`.
+2. Вызвать `build_terminal_report(run_state)`.
+3. Проверить ветку результата:
+   - report branch: `report_markdown`, `report_filename`, `report_type`, `report_envelope`;
+   - error branch: `terminal_error_return`.
+4. При необходимости вызвать `deliver_report(..., write_to_file=True/False, print_to_stdout=True/False)`.
+
+### Delivery semantics
+- Файловый artifact path:
+  - `runs/{run_id}/reports/{report_filename}` (или `base_dir/{run_id}/reports/{report_filename}` при override).
+- API/SDK: вернуть payload с `report_markdown` + `report_envelope`.
+- CLI: опционально печатать markdown в stdout.
+
+### Контрольные инварианты
+- `terminal_error_return` взаимоисключающ с markdown report.
+- `finalization_status` должен соответствовать `report_type` mapping.
+- Для `blocked` в `## 6.1 Main synthesis` обязана быть строка:
+  - `No synthesis was produced because finalization is blocked.`
+
+### Операционная проверка
+```bash
+pytest -q tests/test_output_contract.py
+```
+
+Ожидаемое покрытие:
+- ExactlyOneReport
+- ReportEnvelopePresent
+- MarkdownEnvelopeConsistency
+- Phase8MappingConsistency
+- BlockedReportNoSynthesis
+- ProtocolErrorNoFalseReport

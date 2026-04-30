@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict
 
 
@@ -56,6 +57,9 @@ def build_terminal_report(run_state) -> Dict:
         },
     }
 
+    if envelope["finalization_status"] != report_type:
+        return terminal_error_return(run_state, "finalization_status does not match report_type mapping", safe_to_retry=False)
+
     if report_type == "blocked":
         main = "No synthesis was produced because finalization is blocked."
     else:
@@ -78,6 +82,22 @@ def build_terminal_report(run_state) -> Dict:
     }
 
 
+def deliver_report(report_payload: Dict, *, base_dir: str = "runs", write_to_file: bool = False, print_to_stdout: bool = False) -> Dict:
+    if "terminal_error_return" in report_payload:
+        return report_payload
+
+    result = dict(report_payload)
+    if write_to_file:
+        run_id = result["report_envelope"]["run_id"]
+        target = Path(base_dir) / run_id / "reports" / result["report_filename"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(result["report_markdown"], encoding="utf-8")
+        result["artifact_path"] = str(target)
+    if print_to_stdout:
+        print(result["report_markdown"])
+    return result
+
+
 def terminal_error_return(run_state, reason: str, safe_to_retry: bool) -> Dict:
     diagnostic_event_id = run_state.events[-1].record_id if run_state.events else None
     return {
@@ -89,4 +109,3 @@ def terminal_error_return(run_state, reason: str, safe_to_retry: bool) -> Dict:
             "safe_to_retry": safe_to_retry,
         }
     }
-

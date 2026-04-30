@@ -208,42 +208,42 @@
 ## Output contract: как пользователь получает отчёт (Markdown)
 
 ### Return contract (обязательный)
-- [ ] Executor возвращает:
+- [x] Executor возвращает:
   - `report_markdown: string`
   - `report_filename: authoritative_synthesis_report.md | limited_synthesis_report.md | blocked_finalization_report.md`
   - `report_type: authoritative | limited | blocked`
   - `report_envelope: ReportEnvelope`
-- [ ] Для unrecoverable ошибок finalization возвращается:
+- [x] Для unrecoverable ошибок finalization возвращается:
   - `terminal_error_return`:
     - `error_type: terminal_error`
     - `run_id: string | null`
     - `reason: string`
     - `diagnostic_event_id: string | null`
     - `safe_to_retry: boolean`
-- [ ] `terminal_error_return` взаимоисключающ с markdown-отчётом (либо report, либо terminal_error).
+- [x] `terminal_error_return` взаимоисключающ с markdown-отчётом (либо report, либо terminal_error).
 
 ### Delivery contract (обязательный)
-- [ ] Если включён filesystem output, идентичный markdown записывается в:
+- [x] Если включён filesystem output, идентичный markdown записывается в:
   - `runs/{run_id}/reports/{report_filename}`
-- [ ] В API/SDK режимах всегда доступен `report_markdown` + `report_envelope`.
-- [ ] В CLI режимах поддерживается печать в `stdout` и/или запись в artifact path (через флаги запуска).
+- [x] В API/SDK режимах всегда доступен `report_markdown` + `report_envelope`.
+- [x] В CLI режимах поддерживается печать в `stdout` и/или запись в artifact path (через флаги запуска).
 
 ### Markdown envelope contract (обязательный)
-- [ ] Markdown-отчёт начинается с YAML front matter.
-- [ ] YAML front matter содержит тот же `report_envelope`, что и return payload.
-- [ ] При расхождении front matter и return envelope run помечается `invalid` и MUST NOT считаться completed.
+- [x] Markdown-отчёт начинается с YAML front matter.
+- [x] YAML front matter содержит тот же `report_envelope`, что и return payload.
+- [x] При расхождении front matter и return envelope run помечается `invalid` и MUST NOT считаться completed.
 
 ### Report type mapping (обязательный)
-- [ ] Соответствие Phase 8 outcome -> report filename зафиксировано и проверяется:
+- [x] Соответствие Phase 8 outcome -> report filename зафиксировано и проверяется:
   - `authoritative_synthesis -> authoritative_synthesis_report.md`
   - `limited_synthesis -> limited_synthesis_report.md`
   - `blocked_finalization_report -> blocked_finalization_report.md`
-- [ ] `finalization_status` и `report_filename` всегда согласованы с mapping.
+- [x] `finalization_status` и `report_filename` всегда согласованы с mapping.
 
 ### Blocked report contract (обязательный)
-- [ ] Для `blocked` секция `## 6.1 Main synthesis` содержит явную фразу:
+- [x] Для `blocked` секция `## 6.1 Main synthesis` содержит явную фразу:
   - `No synthesis was produced because finalization is blocked.`
-- [ ] `blocked` отчёт не может содержать authoritative/limited финальные выводы.
+- [x] `blocked` отчёт не может содержать authoritative/limited финальные выводы.
 
 ---
 
