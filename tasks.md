@@ -196,12 +196,12 @@
 
 ## Тесты Output Contract (OC)
 
-- [ ] **OC.ExactlyOneReport**: для completed run возвращается ровно один терминальный markdown-отчёт.
-- [ ] **OC.ReportEnvelopePresent**: в ответе присутствует полный `report_envelope`; для unrecoverable ошибок — `terminal_error_return`.
-- [ ] **OC.MarkdownEnvelopeConsistency**: metadata в YAML front matter markdown побайтно согласована с возвращаемым `report_envelope`; при расхождении run помечается invalid/not-completed.
-- [ ] **OC.Phase8MappingConsistency**: соответствие `phase8 outcome -> report_filename` строго следует утверждённому mapping.
-- [ ] **OC.BlockedReportNoSynthesis**: `blocked_finalization_report` не содержит ложной authoritative/limited финализации и в `## 6.1 Main synthesis` явно сообщает, что synthesis не произведён из-за blocked finalization.
-- [ ] **OC.ProtocolErrorNoFalseReport**: при unrecoverable protocol error возвращается только `terminal_error_return`, без markdown-отчёта.
+- [x] **OC.ExactlyOneReport**: для completed run возвращается ровно один терминальный markdown-отчёт.
+- [x] **OC.ReportEnvelopePresent**: в ответе присутствует полный `report_envelope`; для unrecoverable ошибок — `terminal_error_return`.
+- [x] **OC.MarkdownEnvelopeConsistency**: metadata в YAML front matter markdown побайтно согласована с возвращаемым `report_envelope`; при расхождении run помечается invalid/not-completed.
+- [x] **OC.Phase8MappingConsistency**: соответствие `phase8 outcome -> report_filename` строго следует утверждённому mapping.
+- [x] **OC.BlockedReportNoSynthesis**: `blocked_finalization_report` не содержит ложной authoritative/limited финализации и в `## 6.1 Main synthesis` явно сообщает, что synthesis не произведён из-за blocked finalization.
+- [x] **OC.ProtocolErrorNoFalseReport**: при unrecoverable protocol error возвращается только `terminal_error_return`, без markdown-отчёта.
 
 ---
 
