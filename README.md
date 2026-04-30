@@ -1,27 +1,61 @@
 # Doc3 Executor
 
-Этот репозиторий содержит спецификацию и план реализации `Doc3 Executor` на базе LangGraph.
+`Doc3 Executor` — прототип протокольно-управляемого research workflow (Phase 1→8) с gate-решениями, verification memory и markdown output contract.
 
-Подробности обязательных работ, задач и тестов находятся в `tasks.md`.
+## Что уже реализовано
+- Фазы `1..8` (intent → vocabulary → lexicon → hypotheses → source design → triage/extraction → verification memory → finalizer).
+- Gate-валидации для каждой фазы (`PROMOTE|REVISE|REJECT`).
+- Read-only `ledger_interpreter` для операторской диагностики.
+- Output contract:
+  - `report_markdown`
+  - `report_filename`
+  - `report_type`
+  - `report_envelope`
+  - `terminal_error_return` ветка
+- Интеграционные и контрактные тесты (`F*`, `IT*`, `OC*`).
 
-## Статус
-- На текущем этапе реализованы плановые документы (`plan.md`, `tasks.md`).
-- Реализация кода executor и тестового раннера — следующий этап.
+## Быстрый старт
 
-## Что читать дальше
-- `plan.md` — предразработочный план и этапы внедрения.
-- `tasks.md` — полный бэклог задач и комплексных тестов.
-- `ARCHITECTURE.md` — архитектурные принципы и связи компонентов.
-- `RUNBOOK.md` — операционные процедуры и диагностика.
+### 1) Прогон всех тестов
+```bash
+pytest -q
+```
+
+### 2) Запуск только сквозных интеграционных тестов
+```bash
+pytest -q tests/test_integration.py
+```
+
+### 3) Проверка output contract
+```bash
+pytest -q tests/test_output_contract.py
+```
+
+## Минимальный runtime flow (без CLI)
+
+1. Создать `RunState`.
+2. Последовательно вызвать `run_phase1` … `run_phase8`.
+3. Построить отчёт:
+   - `build_terminal_report(run_state)`
+4. При необходимости записать artifact:
+   - `deliver_report(..., write_to_file=True)`
+
+Подробный операционный порядок, команды и сценарии диагностики — в `RUNBOOK.md`.
+
+## Как читать репозиторий
+- `ARCHITECTURE.md` — as-built архитектура, инварианты и data-flow.
+- `RUNBOOK.md` — эксплуатация, диагностика, сценарии и проверочные команды.
+- `tasks.md` — трекинг задач/тестов по workstream’ам.
+- `plan.md` — эволюция протокола и проектные контракты.
 
 ## Test Execution Lifecycle (Dev/CI vs Runtime)
 
 | Контур | Когда запускается | Что запускается | Блокирует релиз |
 |---|---|---|---|
-| Runtime execution | При обычном использовании workflow | Только Phase/Gate loop (Phase 1→8) | Нет |
-| Dev quick checks | При локальной разработке | Фазовые тесты `F*` | Да (для PR) |
+| Runtime execution | При обычном использовании workflow | Только Phase/Gate loop + finalizer/output | Нет |
+| Dev quick checks | При локальной разработке | Таргетные фазовые/контрактные тесты | Да (для PR) |
 | Pre-merge / CI | Перед merge/release | `F*` + `IT*` + `OC*` | Да |
 
-### Практическое правило
-- **Тесты не являются частью runtime-оркестрации**: пользовательский запуск не должен автозапускать test-suite.
-- **Тесты — это quality gate разработки**: изменения в phase/gate/output contract проходят через CI до использования в проде.
+Практическое правило:
+- runtime-код не должен автоматически запускать test-suite;
+- test-suite — это quality gate для изменений протокола.
