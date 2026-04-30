@@ -250,15 +250,15 @@
 ## Definition of Done (DoD)
 
 Проект готов к “implementation complete”, когда:
-- [ ] все фазовые тесты пройдены;
-- [ ] все кросс-фазовые тесты совместимости пройдены;
-- [ ] сквозные интеграционные тесты A–H пройдены;
-- [ ] output-contract тесты OC пройдены;
-- [ ] отсутствуют нарушения контрольных запретов;
-- [ ] audit trail воспроизводим по ledger;
-- [ ] интерпретация ledger доступна через read-only view без изменения состояния;
-- [ ] terminal finalization (Phase 8) корректно выбирает authoritative/limited/blocked outcome по gate-политике;
-- [ ] документация (`README.md`, `RUNBOOK.md`, `ARCHITECTURE.md`) заполнена и актуальна.
+- [x] все фазовые тесты пройдены;
+- [x] все кросс-фазовые тесты совместимости пройдены;
+- [x] сквозные интеграционные тесты A–H пройдены;
+- [x] output-contract тесты OC пройдены;
+- [x] отсутствуют нарушения контрольных запретов;
+- [x] audit trail воспроизводим по ledger;
+- [x] интерпретация ledger доступна через read-only view без изменения состояния;
+- [x] terminal finalization (Phase 8) корректно выбирает authoritative/limited/blocked outcome по gate-политике;
+- [x] документация (`README.md`, `RUNBOOK.md`, `ARCHITECTURE.md`) заполнена и актуальна.
 
 ---
 
