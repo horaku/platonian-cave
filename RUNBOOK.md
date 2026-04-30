@@ -1028,3 +1028,36 @@ pytest -q tests/test_*.py
 
 ### Release policy
 Изменения в phase/gate/finalizer/interpreter считаются готовыми к релизу только после зелёного CI на обязательных наборах `F*`, `IT*`, `OC*`.
+
+---
+
+## 36) Сквозные интеграционные тесты A–J (статус и запуск)
+
+После реализации `tests/test_integration.py` сквозные сценарии A–J выполняются как единый интеграционный контур качества.
+
+### Что покрывается
+- `IT.A.ZeroKnowledgeInput`
+- `IT.B.NoRetrievalBeforeDesign`
+- `IT.C.SourceGroupSeparation`
+- `IT.D.ContradictionPreservation`
+- `IT.E.SynthesisRefusalWithoutProvenance`
+- `IT.F.ReferenceLeakageGuards`
+- `IT.G.ReopenAndInvalidateFlow`
+- `IT.H.Auditability`
+- `IT.I.InterpreterReadOnlyAuditView`
+- `IT.J.FinalizerOutcomeMatrix`
+
+### Как запускать
+```bash
+pytest -q tests/test_integration.py
+```
+
+### Полный регрессионный запуск
+```bash
+pytest -q
+```
+
+### Ожидаемый operational результат
+- все интеграционные тесты зелёные;
+- поведение протокола подтверждено на сквозной цепочке фазы 1→8;
+- output/finalizer/invalidation/auditability сценарии проверены как единый workflow-контур.

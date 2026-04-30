@@ -181,16 +181,16 @@
 
 ## Сквозные интеграционные тесты (A–F + расширение)
 
-- [ ] **IT.A.ZeroKnowledgeInput**: фазы 1–5 проходят без retrieval и без domain lock-in.
-- [ ] **IT.B.NoRetrievalBeforeDesign**: retrieval невозможен до promoted SourceDiscoveryPlan.
-- [ ] **IT.C.SourceGroupSeparation**: группы источников разделены по epistemic role и limitations.
-- [ ] **IT.D.ContradictionPreservation**: конфликт claims сохраняется в ledger.
-- [ ] **IT.E.SynthesisRefusalWithoutProvenance**: synthesis запрещается при отсутствии provenance/validation.
-- [ ] **IT.F.ReferenceLeakageGuards**: PICO/Boolean/UI/backend не становятся протоколом по умолчанию.
-- [ ] **IT.G.ReopenAndInvalidateFlow**: изменение ранней фазы инициирует downstream invalidation и обязательный пересмотр.
-- [ ] **IT.H.Auditability**: весь run восстанавливается из ledger без скрытого состояния.
-- [ ] **IT.I.InterpreterReadOnlyAuditView**: ledger interpreter предоставляет полный audit view без мутации состояния.
-- [ ] **IT.J.FinalizerOutcomeMatrix**: для одного и того же run корректно различаются authoritative/limited/blocked исходы в зависимости от validation/contradiction статуса.
+- [x] **IT.A.ZeroKnowledgeInput**: фазы 1–5 проходят без retrieval и без domain lock-in.
+- [x] **IT.B.NoRetrievalBeforeDesign**: retrieval невозможен до promoted SourceDiscoveryPlan.
+- [x] **IT.C.SourceGroupSeparation**: группы источников разделены по epistemic role и limitations.
+- [x] **IT.D.ContradictionPreservation**: конфликт claims сохраняется в ledger.
+- [x] **IT.E.SynthesisRefusalWithoutProvenance**: synthesis запрещается при отсутствии provenance/validation.
+- [x] **IT.F.ReferenceLeakageGuards**: PICO/Boolean/UI/backend не становятся протоколом по умолчанию.
+- [x] **IT.G.ReopenAndInvalidateFlow**: изменение ранней фазы инициирует downstream invalidation и обязательный пересмотр.
+- [x] **IT.H.Auditability**: весь run восстанавливается из ledger без скрытого состояния.
+- [x] **IT.I.InterpreterReadOnlyAuditView**: ledger interpreter предоставляет полный audit view без мутации состояния.
+- [x] **IT.J.FinalizerOutcomeMatrix**: для одного и того же run корректно различаются authoritative/limited/blocked исходы в зависимости от validation/contradiction статуса.
 
 ---
 
