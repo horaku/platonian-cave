@@ -660,3 +660,145 @@ PY
 1. проверить наличие `phase6_triage_and_extraction` в `run_state.promoted`;
 2. проверить `len(run_state.promoted['phase6_triage_and_extraction']['extractions']) > 0`;
 3. устранить причину `REVISE` и повторить phase6.
+
+---
+
+## 27) Порядок событий: Phase 7 (Verification Memory)
+
+1. Предусловие запуска:
+   - в `run_state.promoted` присутствует `phase6_triage_and_extraction`.
+   - Если нет — `run_phase7` завершится `ValueError`.
+
+2. Вызов `run_phase7(run_state)`.
+
+3. Внутри `build_verification_ledger(...)` формируется `verification_ledger`:
+   - `run_id`;
+   - `promoted_state` pointers (phase1/phase3/phase4/phase5);
+   - `claim_records`, производные из extractions Phase 6;
+   - каждый claim содержит:
+     - `status` (на старте `proposed`),
+     - `source_links` (`source_id`, `extraction_id`, `locator`),
+     - `validation_status` (по умолчанию `unchecked`),
+     - `decision_history`.
+
+4. Executor создаёт `ProposalRecord(phase="phase7_verification_memory")` и пишет его в `run_state.proposals`.
+
+5. Gate `review_phase7(payload)` проверяет:
+   - наличие и целостность ledger;
+   - наличие `run_id`;
+   - наличие required promoted-state pointers;
+   - валидность claim statuses;
+   - непустые/валидные source links;
+   - валидность значений `validation_status`;
+   - наличие `decision_history`.
+
+6. Пишется `DecisionEvent` в `run_state.events`.
+
+7. Только при `PROMOTE` ledger становится `run_state.promoted["phase7_verification_memory"]`.
+
+8. `ready_for_authoritative_synthesis(run_state)`:
+   - `False`, если phase7 не promoted;
+   - `False`, если в любом claim есть `unchecked` в validation fields;
+   - `True` только после завершения валидации всех claim-полей.
+
+---
+
+## 28) Тест исполняемости Phase 7
+
+```bash
+pytest -q tests/test_phase7.py
+```
+
+Проверяется:
+- генерация verification ledger;
+- gate invariants по source links / statuses / history;
+- блок authoritative synthesis до завершения validation.
+
+---
+
+## 29) Тест совместимости цепочки Phase 1 → 2 → 3 → 4 → 5 → 6 → 7
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py tests/test_phase7.py
+```
+
+Ручной интеграционный прогон:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.graph.phase4 import run_phase4
+from doc3_executor.graph.phase5 import run_phase5
+from doc3_executor.graph.phase6 import run_phase6
+from doc3_executor.graph.phase7 import run_phase7, ready_for_authoritative_synthesis
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_to_p7', trace_id='trace_p1_to_p7')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+run_phase4(rs)
+run_phase5(rs)
+
+hid = rs.promoted['phase4_hypothesis_lattice']['hypotheses'][0]['hypothesis_id']
+run_phase6(rs, [{
+    'source_id': 's1',
+    'linked_hypotheses': [hid],
+    'url_or_doi': 'https://example.org/s1',
+    'section': 'results',
+    'span': 'p3',
+    'claim': 'Higher cognitive load increases dropout risk.',
+    'evidence_type': 'case_study',
+    'supports_or_challenges': 'supports',
+}])
+
+print('authoritative_synthesis_before_p7=', ready_for_authoritative_synthesis(rs))
+run_phase7(rs)
+print('phase7_promoted=', 'phase7_verification_memory' in rs.promoted)
+print('events=', len(rs.events))
+print('last_phase=', rs.events[-1].phase)
+print('last_decision=', rs.events[-1].decision.value)
+print('authoritative_synthesis_after_p7=', ready_for_authoritative_synthesis(rs))
+PY
+```
+
+Ожидание:
+- `authoritative_synthesis_before_p7=False`;
+- `phase7_promoted=True`;
+- `events=7`;
+- `last_phase=phase7_verification_memory`;
+- `last_decision=PROMOTE`;
+- `authoritative_synthesis_after_p7=False` (пока validation_status = `unchecked`).
+
+---
+
+## 30) Диагностика для Phase 7
+
+### Симптом: `ValueError: phase7 requires promoted phase6_triage_and_extraction`
+Причина: phase6 не доведена до `PROMOTE`.
+
+Действия:
+1. проверить `run_state.events` на решение phase6;
+2. исправить причины `REVISE/REJECT` в phase6;
+3. повторно выполнить phase6, затем phase7.
+
+### Симптом: phase7 decision = `REVISE`
+Типовые причины:
+- claim без source links;
+- невалидный `validation_status`;
+- отсутствует `decision_history`;
+- пустой/невалидный locator в source links.
+
+Действия:
+1. проверить `run_state.events[-1].reason`;
+2. исправить структуру ledger;
+3. повторить запуск phase7.
+
+### Симптом: `ready_for_authoritative_synthesis=False` после phase7 promotion
+Причина: ожидаемое поведение до прохождения claim validation (поля остаются `unchecked`).
+
+Действия:
+1. выполнить слой validation и обновить validation_status по claim;
+2. убедиться, что `unchecked` отсутствует;
+3. повторно проверить `ready_for_authoritative_synthesis(run_state)`.

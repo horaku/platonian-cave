@@ -121,15 +121,61 @@
 ## Workstream 7 — Фаза 7: Verification Memory
 
 ### Задачи
-- [ ] Реализовать `VerificationLedger` как append-only журнал.
-- [ ] Реализовать claim lifecycle (`proposed|accepted|rejected|needs_review|verified`).
-- [ ] Реализовать claim validation events и contradiction tracking.
+- [x] Реализовать `VerificationLedger` как append-only журнал.
+- [x] Реализовать claim lifecycle (`proposed|accepted|rejected|needs_review|verified`).
+- [x] Реализовать claim validation events и contradiction tracking.
 
 ### Комплексные тесты
-- [ ] **F7.Core.Functionality**: ledger хранит promoted-state pointers, claim records, source links и decision history.
-- [ ] **F7.Gate.Invariants**: worker output не может стать authoritative без gate promotion.
-- [ ] **F7.CrossPhase.Compatibility**: claims валидно ссылаются на extractions/source locator из фазы 6 и на контекст фаз 1–5.
-- [ ] **F7.Contradiction.Preservation**: при конфликтующих accepted claims создаются contradiction records, конфликт не сглаживается.
+- [x] **F7.Core.Functionality**: ledger хранит promoted-state pointers, claim records, source links и decision history.
+- [x] **F7.Gate.Invariants**: worker output не может стать authoritative без gate promotion.
+- [x] **F7.CrossPhase.Compatibility**: claims валидно ссылаются на extractions/source locator из фазы 6 и на контекст фаз 1–5.
+- [x] **F7.Contradiction.Preservation**: при конфликтующих accepted claims создаются contradiction records, конфликт не сглаживается.
+
+---
+
+## Workstream 8 — Ledger Interpreter (read-only представления verification memory)
+
+### Задачи
+- [ ] Ввести read-only сущность `ledger_interpreter`, читающую только promoted `phase7_verification_memory`.
+- [ ] Спроектировать `LedgerInterpretationView`:
+  - `claims_by_status` (`proposed|accepted|rejected|needs_review|verified`);
+  - `source_link_index`;
+  - `open_contradictions`;
+  - `synthesis_readiness` + `blocking_reasons`;
+  - `next_actions`.
+- [ ] Зафиксировать policy, что interpreter не меняет `RunState` и не может выполнять promotion/verification действий.
+- [ ] Добавить операторские сценарии использования interpreter в RUNBOOK (диагностика и triage блокеров synthesis).
+
+### Комплексные тесты
+- [ ] **F8I.Core.Functionality**: interpreter строит человеко-читаемый view из реального promoted ledger без потери claim/source/contradiction связей.
+- [ ] **F8I.ReadOnly.Invariant**: после вызова interpreter `run_state.proposals/events/promoted` остаются неизменными (zero-mutation guarantee).
+- [ ] **F8I.Contradiction.Visibility**: unresolved contradictions всегда явно присутствуют в view и не маскируются.
+- [ ] **F8I.Readiness.Blockers**: при `unchecked`/`disputed` валидации `authoritative_ready=False`, а `blocking_reasons` содержит трассируемые причины.
+
+---
+
+## Workstream 9 — Фаза 8: Finalizer (terminal result)
+
+### Задачи
+- [ ] Добавить `phase8_finalizer` как отдельную терминальную фазу после promoted `phase7_verification_memory`.
+- [ ] Реализовать outcomes фазы 8:
+  - `authoritative_synthesis`;
+  - `limited_synthesis`;
+  - `blocked_finalization_report`.
+- [ ] Реализовать gate фазы 8 (`PROMOTE|REVISE|REJECT`) с правилами:
+  - authoritative запрещён при `unchecked` для обязательных validation полей;
+  - contradictions не могут быть скрыты или сглажены;
+  - append-only history не перезаписывается.
+- [ ] Добавить `finalization_status` в promoted-state (`authoritative|limited|blocked`) как terminal marker.
+- [ ] Зафиксировать authority boundary: worker output не может стать финальной authoritative выдачей без gate decision.
+
+### Комплексные тесты
+- [ ] **F8.Core.Functionality**: фаза 8 формирует корректный terminal record и пишет `DecisionEvent` с валидным outcome.
+- [ ] **F8.Authoritative.Readiness**: authoritative synthesis отклоняется при любом `unchecked` в обязательной claim validation.
+- [ ] **F8.Limited.WithDisclosure**: limited synthesis разрешён только при явном раскрытии ограничений и границ применимости.
+- [ ] **F8.Blocked.FinalizationReport**: при критических блокерах создаётся blocked report с actionable next steps.
+- [ ] **F8.Contradiction.Preservation**: финализация не удаляет contradiction records и не сводит конфликт к нейтральной прозе.
+- [ ] **F8.AuthorityBoundary**: попытка worker-обхода gate приводит к protocol error/reject.
 
 ---
 
@@ -143,6 +189,61 @@
 - [ ] **IT.F.ReferenceLeakageGuards**: PICO/Boolean/UI/backend не становятся протоколом по умолчанию.
 - [ ] **IT.G.ReopenAndInvalidateFlow**: изменение ранней фазы инициирует downstream invalidation и обязательный пересмотр.
 - [ ] **IT.H.Auditability**: весь run восстанавливается из ledger без скрытого состояния.
+- [ ] **IT.I.InterpreterReadOnlyAuditView**: ledger interpreter предоставляет полный audit view без мутации состояния.
+- [ ] **IT.J.FinalizerOutcomeMatrix**: для одного и того же run корректно различаются authoritative/limited/blocked исходы в зависимости от validation/contradiction статуса.
+
+---
+
+## Тесты Output Contract (OC)
+
+- [ ] **OC.ExactlyOneReport**: для completed run возвращается ровно один терминальный markdown-отчёт.
+- [ ] **OC.ReportEnvelopePresent**: в ответе присутствует полный `report_envelope`; для unrecoverable ошибок — `terminal_error_return`.
+- [ ] **OC.MarkdownEnvelopeConsistency**: metadata в YAML front matter markdown побайтно согласована с возвращаемым `report_envelope`; при расхождении run помечается invalid/not-completed.
+- [ ] **OC.Phase8MappingConsistency**: соответствие `phase8 outcome -> report_filename` строго следует утверждённому mapping.
+- [ ] **OC.BlockedReportNoSynthesis**: `blocked_finalization_report` не содержит ложной authoritative/limited финализации и в `## 6.1 Main synthesis` явно сообщает, что synthesis не произведён из-за blocked finalization.
+- [ ] **OC.ProtocolErrorNoFalseReport**: при unrecoverable protocol error возвращается только `terminal_error_return`, без markdown-отчёта.
+
+---
+
+## Output contract: как пользователь получает отчёт (Markdown)
+
+### Return contract (обязательный)
+- [ ] Executor возвращает:
+  - `report_markdown: string`
+  - `report_filename: authoritative_synthesis_report.md | limited_synthesis_report.md | blocked_finalization_report.md`
+  - `report_type: authoritative | limited | blocked`
+  - `report_envelope: ReportEnvelope`
+- [ ] Для unrecoverable ошибок finalization возвращается:
+  - `terminal_error_return`:
+    - `error_type: terminal_error`
+    - `run_id: string | null`
+    - `reason: string`
+    - `diagnostic_event_id: string | null`
+    - `safe_to_retry: boolean`
+- [ ] `terminal_error_return` взаимоисключающ с markdown-отчётом (либо report, либо terminal_error).
+
+### Delivery contract (обязательный)
+- [ ] Если включён filesystem output, идентичный markdown записывается в:
+  - `runs/{run_id}/reports/{report_filename}`
+- [ ] В API/SDK режимах всегда доступен `report_markdown` + `report_envelope`.
+- [ ] В CLI режимах поддерживается печать в `stdout` и/или запись в artifact path (через флаги запуска).
+
+### Markdown envelope contract (обязательный)
+- [ ] Markdown-отчёт начинается с YAML front matter.
+- [ ] YAML front matter содержит тот же `report_envelope`, что и return payload.
+- [ ] При расхождении front matter и return envelope run помечается `invalid` и MUST NOT считаться completed.
+
+### Report type mapping (обязательный)
+- [ ] Соответствие Phase 8 outcome -> report filename зафиксировано и проверяется:
+  - `authoritative_synthesis -> authoritative_synthesis_report.md`
+  - `limited_synthesis -> limited_synthesis_report.md`
+  - `blocked_finalization_report -> blocked_finalization_report.md`
+- [ ] `finalization_status` и `report_filename` всегда согласованы с mapping.
+
+### Blocked report contract (обязательный)
+- [ ] Для `blocked` секция `## 6.1 Main synthesis` содержит явную фразу:
+  - `No synthesis was produced because finalization is blocked.`
+- [ ] `blocked` отчёт не может содержать authoritative/limited финальные выводы.
 
 ---
 
@@ -152,8 +253,11 @@
 - [ ] все фазовые тесты пройдены;
 - [ ] все кросс-фазовые тесты совместимости пройдены;
 - [ ] сквозные интеграционные тесты A–H пройдены;
+- [ ] output-contract тесты OC пройдены;
 - [ ] отсутствуют нарушения контрольных запретов;
 - [ ] audit trail воспроизводим по ledger;
+- [ ] интерпретация ledger доступна через read-only view без изменения состояния;
+- [ ] terminal finalization (Phase 8) корректно выбирает authoritative/limited/blocked outcome по gate-политике;
 - [ ] документация (`README.md`, `RUNBOOK.md`, `ARCHITECTURE.md`) заполнена и актуальна.
 
 ---
