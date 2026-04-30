@@ -144,7 +144,7 @@
   - `synthesis_readiness` + `blocking_reasons`;
   - `next_actions`.
 - [x] Зафиксировать policy, что interpreter не меняет `RunState` и не может выполнять promotion/verification действий.
-- [ ] Добавить операторские сценарии использования interpreter в RUNBOOK (диагностика и triage блокеров synthesis).
+- [x] Добавить операторские сценарии использования interpreter в RUNBOOK (диагностика и triage блокеров synthesis).
 
 ### Комплексные тесты
 - [x] **F8I.Core.Functionality**: interpreter строит человеко-читаемый view из реального promoted ledger без потери claim/source/contradiction связей.

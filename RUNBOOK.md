@@ -926,3 +926,105 @@ pytest -q tests/test_phase8.py
 - blocked report on disputed validation;
 - contradiction preservation;
 - authority-boundary reject при попытке bypass.
+
+---
+
+## 34) Операторские сценарии: Ledger Interpreter (диагностика и triage блокеров synthesis)
+
+### Назначение
+`ledger_interpreter` — read-only слой над promoted `phase7_verification_memory`.
+Он не меняет `RunState` и используется оператором для:
+- обзора статусов claims;
+- локализации блокеров authoritative synthesis;
+- приоритизации следующего шага (validation, contradiction review, re-run phase8).
+
+### Базовый операторский сценарий
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.graph.phase4 import run_phase4
+from doc3_executor.graph.phase5 import run_phase5
+from doc3_executor.graph.phase6 import run_phase6
+from doc3_executor.graph.phase7 import run_phase7
+from doc3_executor.capabilities.ledger_interpreter import interpret_ledger
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_interpreter_ops', trace_id='trace_interpreter_ops')
+run_phase1(rs, 'Нужен план поиска: почему люди бросают онлайн-курсы')
+run_phase2(rs)
+run_phase3(rs)
+run_phase4(rs)
+run_phase5(rs)
+hid = rs.promoted['phase4_hypothesis_lattice']['hypotheses'][0]['hypothesis_id']
+run_phase6(rs, [{
+    'source_id': 's1',
+    'linked_hypotheses': [hid],
+    'url_or_doi': 'https://example.org/s1',
+    'section': 'results',
+    'span': 'p3',
+    'claim': 'Higher cognitive load increases dropout risk.',
+    'evidence_type': 'case_study',
+    'supports_or_challenges': 'supports',
+}])
+run_phase7(rs)
+
+view = interpret_ledger(rs)
+print('authoritative_ready=', view['synthesis_readiness']['authoritative_ready'])
+print('blocking_reasons=', view['synthesis_readiness']['blocking_reasons'])
+print('next_actions=', view['next_actions'])
+print('open_contradictions=', view['open_contradictions'])
+PY
+```
+
+### Triage policy по результатам interpreter
+1. `authoritative_ready=False` и есть `unchecked`:
+   - выполнить/добавить claim validation;
+   - повторно проверить interpreter view;
+   - затем запускать `phase8_finalizer`.
+2. Есть `open_contradictions`:
+   - провести contradiction review;
+   - зафиксировать adjudication/статус;
+   - повторно проверить readiness.
+3. Нет блокеров:
+   - переход к finalization (Phase 8).
+
+### Инварианты оператора
+- Нельзя использовать interpreter для promotion/verification действий.
+- Любые изменения состояния проходят через phase/gate flow.
+- Interpreter используется только как диагностический и explainability слой.
+
+---
+
+## 35) Жизненный цикл тестов: что в Dev/CI, а что в Runtime
+
+### Runtime (использование workflow)
+При обычном запуске executor выполняется только протокол:
+- Phase nodes;
+- Gate checks;
+- Promotion/Decision events;
+- Finalization/output generation.
+
+`pytest` в runtime path не вызывается.
+
+### Dev/CI (контур качества)
+Тестовые наборы запускаются как quality gates до merge/release:
+- `F*` — фазовая корректность;
+- `IT*` — сквозная интеграция протокола;
+- `OC*` — output contract и delivery invariants.
+
+### Минимальные команды
+```bash
+# Локальная быстрая проверка фазы
+pytest -q tests/test_phase8.py
+
+# Полная фазовая проверка цепочки
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py tests/test_phase7.py tests/test_phase8.py
+
+# Output contract / интеграция (по мере реализации)
+pytest -q tests/test_*.py
+```
+
+### Release policy
+Изменения в phase/gate/finalizer/interpreter считаются готовыми к релизу только после зелёного CI на обязательных наборах `F*`, `IT*`, `OC*`.
