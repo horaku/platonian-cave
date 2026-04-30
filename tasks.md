@@ -136,46 +136,46 @@
 ## Workstream 8 — Ledger Interpreter (read-only представления verification memory)
 
 ### Задачи
-- [ ] Ввести read-only сущность `ledger_interpreter`, читающую только promoted `phase7_verification_memory`.
-- [ ] Спроектировать `LedgerInterpretationView`:
+- [x] Ввести read-only сущность `ledger_interpreter`, читающую только promoted `phase7_verification_memory`.
+- [x] Спроектировать `LedgerInterpretationView`:
   - `claims_by_status` (`proposed|accepted|rejected|needs_review|verified`);
   - `source_link_index`;
   - `open_contradictions`;
   - `synthesis_readiness` + `blocking_reasons`;
   - `next_actions`.
-- [ ] Зафиксировать policy, что interpreter не меняет `RunState` и не может выполнять promotion/verification действий.
+- [x] Зафиксировать policy, что interpreter не меняет `RunState` и не может выполнять promotion/verification действий.
 - [ ] Добавить операторские сценарии использования interpreter в RUNBOOK (диагностика и triage блокеров synthesis).
 
 ### Комплексные тесты
-- [ ] **F8I.Core.Functionality**: interpreter строит человеко-читаемый view из реального promoted ledger без потери claim/source/contradiction связей.
-- [ ] **F8I.ReadOnly.Invariant**: после вызова interpreter `run_state.proposals/events/promoted` остаются неизменными (zero-mutation guarantee).
-- [ ] **F8I.Contradiction.Visibility**: unresolved contradictions всегда явно присутствуют в view и не маскируются.
-- [ ] **F8I.Readiness.Blockers**: при `unchecked`/`disputed` валидации `authoritative_ready=False`, а `blocking_reasons` содержит трассируемые причины.
+- [x] **F8I.Core.Functionality**: interpreter строит человеко-читаемый view из реального promoted ledger без потери claim/source/contradiction связей.
+- [x] **F8I.ReadOnly.Invariant**: после вызова interpreter `run_state.proposals/events/promoted` остаются неизменными (zero-mutation guarantee).
+- [x] **F8I.Contradiction.Visibility**: unresolved contradictions всегда явно присутствуют в view и не маскируются.
+- [x] **F8I.Readiness.Blockers**: при `unchecked`/`disputed` валидации `authoritative_ready=False`, а `blocking_reasons` содержит трассируемые причины.
 
 ---
 
 ## Workstream 9 — Фаза 8: Finalizer (terminal result)
 
 ### Задачи
-- [ ] Добавить `phase8_finalizer` как отдельную терминальную фазу после promoted `phase7_verification_memory`.
-- [ ] Реализовать outcomes фазы 8:
+- [x] Добавить `phase8_finalizer` как отдельную терминальную фазу после promoted `phase7_verification_memory`.
+- [x] Реализовать outcomes фазы 8:
   - `authoritative_synthesis`;
   - `limited_synthesis`;
   - `blocked_finalization_report`.
-- [ ] Реализовать gate фазы 8 (`PROMOTE|REVISE|REJECT`) с правилами:
+- [x] Реализовать gate фазы 8 (`PROMOTE|REVISE|REJECT`) с правилами:
   - authoritative запрещён при `unchecked` для обязательных validation полей;
   - contradictions не могут быть скрыты или сглажены;
   - append-only history не перезаписывается.
-- [ ] Добавить `finalization_status` в promoted-state (`authoritative|limited|blocked`) как terminal marker.
-- [ ] Зафиксировать authority boundary: worker output не может стать финальной authoritative выдачей без gate decision.
+- [x] Добавить `finalization_status` в promoted-state (`authoritative|limited|blocked`) как terminal marker.
+- [x] Зафиксировать authority boundary: worker output не может стать финальной authoritative выдачей без gate decision.
 
 ### Комплексные тесты
-- [ ] **F8.Core.Functionality**: фаза 8 формирует корректный terminal record и пишет `DecisionEvent` с валидным outcome.
-- [ ] **F8.Authoritative.Readiness**: authoritative synthesis отклоняется при любом `unchecked` в обязательной claim validation.
-- [ ] **F8.Limited.WithDisclosure**: limited synthesis разрешён только при явном раскрытии ограничений и границ применимости.
-- [ ] **F8.Blocked.FinalizationReport**: при критических блокерах создаётся blocked report с actionable next steps.
-- [ ] **F8.Contradiction.Preservation**: финализация не удаляет contradiction records и не сводит конфликт к нейтральной прозе.
-- [ ] **F8.AuthorityBoundary**: попытка worker-обхода gate приводит к protocol error/reject.
+- [x] **F8.Core.Functionality**: фаза 8 формирует корректный terminal record и пишет `DecisionEvent` с валидным outcome.
+- [x] **F8.Authoritative.Readiness**: authoritative synthesis отклоняется при любом `unchecked` в обязательной claim validation.
+- [x] **F8.Limited.WithDisclosure**: limited synthesis разрешён только при явном раскрытии ограничений и границ применимости.
+- [x] **F8.Blocked.FinalizationReport**: при критических блокерах создаётся blocked report с actionable next steps.
+- [x] **F8.Contradiction.Preservation**: финализация не удаляет contradiction records и не сводит конфликт к нейтральной прозе.
+- [x] **F8.AuthorityBoundary**: попытка worker-обхода gate приводит к protocol error/reject.
 
 ---
 

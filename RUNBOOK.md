@@ -802,3 +802,127 @@ PY
 1. выполнить слой validation и обновить validation_status по claim;
 2. убедиться, что `unchecked` отсутствует;
 3. повторно проверить `ready_for_authoritative_synthesis(run_state)`.
+
+---
+
+## 30) Порядок событий: Phase 8 (Finalizer)
+
+1. Предусловие запуска:
+   - в `run_state.promoted` присутствует `phase7_verification_memory`.
+   - Если нет — `run_phase8` завершится `ValueError`.
+
+2. Вызов `run_phase8(run_state)`.
+
+3. Executor читает `verification_ledger.claim_records` из promoted Phase 7 и вычисляет:
+   - `authoritative_ready` через `ready_for_authoritative_synthesis(run_state)`;
+   - наличие `open_contradictions`;
+   - наличие `disputed` validation статусов.
+
+4. Формируется `finalization` proposal с outcome:
+   - `authoritative_synthesis`, если claims полностью validated и нет открытых конфликтов;
+   - `limited_synthesis`, если claims есть, но authoritative условия не выполнены;
+   - `blocked_finalization_report`, если есть disputed/критические блокеры.
+
+5. В proposal добавляется report metadata:
+   - `report_type` (`authoritative|limited|blocked`)
+   - `report_filename`
+   - `main_synthesis` (для blocked обязательно: `No synthesis was produced because finalization is blocked.`)
+
+6. Gate `review_phase8(payload)` проверяет:
+   - валидный outcome;
+   - наличие report metadata;
+   - наличие claim_records;
+   - запрет authoritative outcome при `unchecked|disputed`;
+   - корректную blocked формулировку.
+
+7. Записывается `DecisionEvent` с phase=`phase8_finalizer`.
+
+8. Только при `PROMOTE` proposal становится `run_state.promoted["phase8_finalizer"]`.
+
+---
+
+## 31) Тест исполняемости Phase 8
+
+```bash
+pytest -q tests/test_phase8.py
+```
+
+Проверяется:
+- генерация phase8 finalization proposal;
+- запись DecisionEvent для phase8;
+- gate-проверки authoritative/blocked инвариантов.
+
+---
+
+## 32) Тест совместимости цепочки Phase 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
+
+```bash
+pytest -q tests/test_phase1.py tests/test_phase2.py tests/test_phase3.py tests/test_phase4.py tests/test_phase5.py tests/test_phase6.py tests/test_phase7.py tests/test_phase8.py
+```
+
+Ручной интеграционный прогон:
+```bash
+PYTHONPATH=src python - <<'PY'
+from doc3_executor.graph.executor import run_phase1
+from doc3_executor.graph.phase2 import run_phase2
+from doc3_executor.graph.phase3 import run_phase3
+from doc3_executor.graph.phase4 import run_phase4
+from doc3_executor.graph.phase5 import run_phase5
+from doc3_executor.graph.phase6 import run_phase6
+from doc3_executor.graph.phase7 import run_phase7
+from doc3_executor.graph.phase8 import run_phase8
+from doc3_executor.schemas.models import RunState
+
+rs = RunState(run_id='run_p1_to_p8', trace_id='trace_p1_to_p8')
+run_phase1(rs, 'Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники')
+run_phase2(rs)
+run_phase3(rs)
+run_phase4(rs)
+run_phase5(rs)
+hid = rs.promoted['phase4_hypothesis_lattice']['hypotheses'][0]['hypothesis_id']
+run_phase6(rs, [{
+    'source_id': 's1',
+    'linked_hypotheses': [hid],
+    'url_or_doi': 'https://example.org/s1',
+    'section': 'results',
+    'span': 'p3',
+    'claim': 'Higher cognitive load increases dropout risk.',
+    'evidence_type': 'case_study',
+    'supports_or_challenges': 'supports',
+}])
+run_phase7(rs)
+run_phase8(rs)
+
+print('phase8_promoted=', 'phase8_finalizer' in rs.promoted)
+print('events=', len(rs.events))
+print('last_phase=', rs.events[-1].phase)
+print('last_decision=', rs.events[-1].decision.value)
+print('phase8_outcome=', rs.promoted['phase8_finalizer']['finalization']['outcome'])
+PY
+```
+
+---
+
+## 33) Дополнения по закрытию Workstream 9
+
+Phase 8 finalizer теперь дополнительно фиксирует:
+- `finalization_status`: `authoritative | limited | blocked`;
+- `limitations` для limited/blocked outcomes;
+- `next_actions` как обязательный actionable список для blocked outcome.
+
+Дополнительные gate-правила Phase 8:
+- `limited_synthesis` требует явного disclosure (`limitations`);
+- `blocked_finalization_report` требует:
+  - стандартную фразу в main synthesis;
+  - непустой список `next_actions`.
+
+Дополнительные проверки:
+```bash
+pytest -q tests/test_phase8.py
+```
+
+Покрываются сценарии:
+- limited with disclosure;
+- blocked report on disputed validation;
+- contradiction preservation;
+- authority-boundary reject при попытке bypass.
