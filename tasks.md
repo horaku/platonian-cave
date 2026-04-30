@@ -247,6 +247,34 @@
 
 ---
 
+## Workstream 10 — Productization: устойчивый user-facing runner и упаковка
+
+### Задачи
+- [ ] Реализовать единый `run_workflow_resilient` (или CLI entrypoint), который ведёт run через Phase 1→8 с учётом gate-решений.
+- [ ] Внедрить policy для `REVISE`:
+  - bounded retry;
+  - логика переоткрытия предыдущей фазы;
+  - формирование понятного user-facing сообщения с `reason` и `next action`.
+- [ ] Внедрить policy для `REJECT`:
+  - немедленный controlled stop;
+  - генерация `blocked_finalization_report` / `terminal_error_return` по контракту.
+- [ ] Устранить packaging gap для `src/` layout:
+  - добавить корректную setuptools-конфигурацию package discovery в `pyproject.toml`;
+  - обеспечить импорт `doc3_executor` после `pip install -e .` без `PYTHONPATH` хака.
+- [ ] Добавить официальный CLI/runner сценарий в README и RUNBOOK:
+  - минимальная команда запуска;
+  - expected outputs;
+  - поведение при `REVISE/REJECT`.
+
+### Комплексные тесты
+- [ ] **P10.Runner.HappyPath**: user-facing runner проходит цепочку 1→8 и возвращает terminal report payload.
+- [ ] **P10.Runner.ReviseRecovery**: при `REVISE` runner выполняет retry/reopen policy и завершает run без необработанного исключения.
+- [ ] **P10.Runner.RejectHandling**: при `REJECT` runner корректно завершает run через blocked/error ветку output contract.
+- [ ] **P10.Packaging.EditableInstall**: после `pip install -e .` импорт `doc3_executor` работает в отдельном python-процессе без `PYTHONPATH`.
+- [ ] **P10.CLI.WindowsFlow**: Windows-совместимый сценарий запуска (PowerShell) приводит к artifact report path без ручного патчинга окружения.
+
+---
+
 ## Definition of Done (DoD)
 
 Проект готов к “implementation complete”, когда:
@@ -259,6 +287,8 @@
 - [x] интерпретация ledger доступна через read-only view без изменения состояния;
 - [x] terminal finalization (Phase 8) корректно выбирает authoritative/limited/blocked outcome по gate-политике;
 - [x] документация (`README.md`, `RUNBOOK.md`, `ARCHITECTURE.md`) заполнена и актуальна.
+- [ ] user-facing runner устойчиво обрабатывает `PROMOTE|REVISE|REJECT` без ручного вмешательства в код запуска.
+- [ ] editable-install и импорт package подтверждены на чистом окружении без `PYTHONPATH` workaround.
 
 ---
 
