@@ -42,6 +42,25 @@ pytest -q tests/test_output_contract.py
 
 Подробный операционный порядок, команды и сценарии диагностики — в `RUNBOOK.md`.
 
+## Официальный runner / CLI сценарий
+
+После `pip install -e .` доступен entrypoint:
+
+```bash
+doc3-run --input "Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники" --write-report
+```
+
+PowerShell-вариант:
+
+```powershell
+doc3-run --input "Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники" --write-report --base-dir runs
+```
+
+CLI использует resilient orchestration:
+- автоматически пытается восстановиться на `REVISE` (bounded retries);
+- возвращает `terminal_error_return` при `REJECT`/невосстановимой ветке;
+- пишет report artifact при `--write-report`.
+
 ## Как читать репозиторий
 - `ARCHITECTURE.md` — as-built архитектура, инварианты и data-flow.
 - `RUNBOOK.md` — эксплуатация, диагностика, сценарии и проверочные команды.

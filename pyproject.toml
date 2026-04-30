@@ -7,5 +7,14 @@ name = "doc3-executor"
 version = "0.1.0"
 requires-python = ">=3.10"
 
+[project.scripts]
+doc3-run = "doc3_executor.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]

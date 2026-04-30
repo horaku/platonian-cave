@@ -1100,3 +1100,29 @@ pytest -q tests/test_output_contract.py
 - Phase8MappingConsistency
 - BlockedReportNoSynthesis
 - ProtocolErrorNoFalseReport
+
+---
+
+## 38) Productization runner (user-facing) — запуск и поведение
+
+### CLI entrypoint
+После `pip install -e .` доступна команда:
+
+```bash
+doc3-run --input "Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники" --write-report
+```
+
+PowerShell:
+```powershell
+doc3-run --input "Нужен план поиска: хочу понять, почему люди бросают онлайн-курсы и как искать источники" --write-report --base-dir runs
+```
+
+### Runtime policy
+- `PROMOTE` -> переход к следующей фазе.
+- `REVISE` -> bounded retry + auto-adjust input (resilient branch).
+- `REJECT` -> controlled stop с `terminal_error_return`.
+
+### Артефакты
+- report branch: `report_markdown`, `report_filename`, `report_type`, `report_envelope`.
+- error branch: `terminal_error_return`.
+- при `--write-report`: `runs/{run_id}/reports/{report_filename}`.
