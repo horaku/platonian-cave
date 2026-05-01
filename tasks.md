@@ -282,18 +282,18 @@
 ### Workstream A2.1 — Agentic runtime contract and decision records
 
 #### Задачи
-- [ ] Ввести обязательный `agent_step_record`:
+- [x] Ввести обязательный `agent_step_record`:
   - `selected_capability`,
   - `intent_for_step`,
   - `why_this_step`,
   - `expected_state_change`,
   - `risk_flags`.
-- [ ] Зафиксировать policy matrix “какая capability разрешена на какой фазе”.
-- [ ] Реализовать аудит-связь `agent_step_record -> DecisionEvent -> promoted/verified state`.
+- [x] Зафиксировать policy matrix “какая capability разрешена на какой фазе”.
+- [x] Реализовать аудит-связь `agent_step_record -> DecisionEvent -> promoted/verified state`.
 
 #### Комплексные тесты
-- [ ] **A2.Contract.StepTraceability**: каждый шаг агента связан с event chain и воспроизводим по run history.
-- [ ] **A2.Contract.CapabilityPolicy**: нарушение phase-capability policy блокируется и фиксируется как policy violation.
+- [x] **A2.Contract.StepTraceability**: каждый шаг агента связан с event chain и воспроизводим по run history.
+- [x] **A2.Contract.CapabilityPolicy**: нарушение phase-capability policy блокируется и фиксируется как policy violation.
 
 ---
 
